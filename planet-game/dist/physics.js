@@ -8,7 +8,9 @@ const PLANETS = [
   {name:'天王星',r:55,color:'#acd7d0',shade:'#83b7ad'},
   {name:'土星',r:64,color:'#d2b8df',shade:'#b298c7'},
   {name:'木星',r:73,color:'#e4b392',shade:'#c99375'},
-  {name:'太阳',r:84,color:'#f3cf77',shade:'#e5b653'}
+  {name:'太阳',r:84,color:'#ffd66b',shade:'#f5a938'},
+  {name:'红巨星',r:94,color:'#f58b78',shade:'#c64f64'},
+  {name:'黑洞',r:104,color:'#42345e',shade:'#21182f'}
 ];
 const WIDTH=480, HEIGHT=580, LIMIT=94;
 function makePlanet(level,x,y){return {level,x,y,vx:0,vy:0,age:0};}
