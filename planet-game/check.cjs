@@ -1,0 +1,41 @@
+const assert = require('node:assert/strict');
+const {PLANETS,makePlanet,advance,WIDTH,HEIGHT}=require('./dist/physics.js');
+let balls=[makePlanet(0,100,400),makePlanet(0,130,400)],merges=[];
+advance(balls,b=>merges.push(b.level));assert.equal(balls.length,1);assert.deepEqual(merges,[1]);
+balls=[makePlanet(0,100,400),makePlanet(1,132,400)];advance(balls,()=>assert.fail('different planets cannot merge'));assert.equal(balls.length,2);
+balls=[makePlanet(8,160,490),makePlanet(8,310,490)];advance(balls,()=>assert.fail('sun is final planet'));assert.equal(balls.length,2);
+balls=[makePlanet(0,-90,HEIGHT+20),makePlanet(2,WIDTH+60,250)];
+for(let i=0;i<1200;i++)advance(balls,()=>{});
+for(const b of balls){const r=PLANETS[b.level].r;assert(Number.isFinite(b.x)&&Number.isFinite(b.y));assert(b.x>=r&&b.x<=WIDTH-r);assert(b.y<=HEIGHT-r);}
+balls=Array.from({length:30},(_,i)=>makePlanet(i%4,40+(i*71)%400,150-Math.floor(i/6)*60));
+for(let i=0;i<1800;i++)advance(balls,b=>assert(b.level<PLANETS.length));
+for(const b of balls)assert(Number.isFinite(b.x)&&Number.isFinite(b.y));
+console.log('PASS: equal merge, unequal collision, final planet, boundaries, dense-board stability');
+
+// Exercise the actual gamepad polling code with synthetic controller snapshots.
+const vm=require('node:vm'),fs=require('node:fs');
+const source=fs.readFileSync(__dirname+'/dist/game.js','utf8');
+const pad={index:0,id:'test controller',connected:true,mapping:'standard',axes:[0],buttons:Array.from({length:16},()=>({pressed:false}))};
+let pads=[pad],focused=true,drops=0,restarts=0,message={textContent:''};
+const state={navigator:{getGamepads:()=>pads},document:{hidden:false,hasFocus:()=>focused,querySelector:()=>null},$:()=>message,PLANETS,WIDTH,level:0,aim:240,paused:false,ended:false};
+state.drop=()=>drops++;
+state.togglePause=()=>{if(!state.ended)state.paused=!state.paused;};
+state.reset=()=>{restarts++;state.paused=false;state.ended=false;};
+vm.createContext(state);
+vm.runInContext(source.slice(source.indexOf('const STICK_DEADZONE='),source.indexOf("window.addEventListener('blur'")),state);
+const poll=(ms=16)=>state.pollGamepad(ms);
+const button=(i,on)=>{pad.buttons[i].pressed=on;poll();};
+pad.buttons[0].pressed=true;poll();assert.equal(drops,0,'initial held button ignored');
+button(0,false);button(0,true);poll();assert.equal(drops,1,'held button cannot repeat');
+button(0,false);button(0,true);assert.equal(drops,2,'release rearms button');button(0,false);
+pad.axes[0]=.15;poll();assert.equal(state.aim,240,'deadzone prevents drift');
+pad.axes[0]=1;poll(100);assert.equal(state.aim,270);pad.axes[0]=0;
+button(14,true);assert(state.aim<270);button(14,false);
+button(9,true);assert(state.paused);poll();assert(state.paused,'pause cannot repeat');button(9,false);
+button(0,true);assert(!state.paused);assert.equal(drops,2,'resume does not also drop');button(0,false);
+focused=false;button(0,true);focused=true;poll();assert.equal(drops,2,'no deferred press after refocus');button(0,false);
+pads=[];poll();assert(state.paused,'disconnect pauses');pads=[pad];pad.buttons[0].pressed=true;poll();assert(state.paused,'reconnection does not resume');button(0,false);button(0,true);assert(!state.paused);button(0,false);
+state.ended=true;button(0,true);assert.equal(restarts,1);assert.equal(drops,2);button(0,false);
+pad.mapping='';poll();assert.match(message.textContent,/未识别/);button(0,true);assert.equal(drops,2);
+state.navigator.getGamepads=()=>{throw new Error('blocked API');};poll();
+console.log('PASS: gamepad movement, deadzone, button edges, pause, focus, disconnect, reconnect, replay, unsupported API');
