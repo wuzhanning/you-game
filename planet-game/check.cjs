@@ -39,3 +39,31 @@ state.ended=true;button(0,true);assert.equal(restarts,1);assert.equal(drops,2);b
 pad.mapping='';poll();assert.match(message.textContent,/未识别/);button(0,true);assert.equal(drops,2);
 state.navigator.getGamepads=()=>{throw new Error('blocked API');};poll();
 console.log('PASS: gamepad movement, deadzone, button edges, pause, focus, disconnect, reconnect, replay, unsupported API');
+
+const storage=new Map(),ui={};
+const savedState={score:60,best:90,balls:[makePlanet(2,160,400)],level:1,nextLevel:0,aim:160,cooldown:12,overTicks:0,ended:false,paused:false,discovered:new Set([0,1,2]),PLANETS,WIDTH,
+  localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)||null},
+  $:id=>ui[id]??=( {textContent:'',style:{}} ),setOverlay:()=>{}};
+vm.createContext(savedState);
+vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),savedState);
+savedState.saveGame();savedState.score=0;savedState.balls=[];savedState.restoreGame();
+assert.equal(savedState.score,60);assert.equal(savedState.best,90);assert.equal(savedState.balls[0].level,2);assert(savedState.paused,'resume is opt-in');
+savedState.ended=true;savedState.saveGame();savedState.ended=false;savedState.restoreGame();assert(savedState.ended,'completed round survives reload');
+const validSave=storage.get('planet-save');storage.set('planet-save','{bad');savedState.restoreGame();assert.match(ui['save-status'].textContent,/无法读取/);
+const badSave=JSON.parse(validSave);badSave.balls[0].level=99;storage.set('planet-save',JSON.stringify(badSave));savedState.restoreGame();assert.equal(savedState.balls[0].level,2,'invalid save does not overwrite state');
+savedState.localStorage.setItem=()=>{throw new Error('quota');};savedState.saveGame();assert.match(ui['save-status'].textContent,/无法保存/);
+let notes=0,resumes=0;
+const audio={sound:true,audioContext:{state:'running',currentTime:0,destination:{},resume:()=>{resumes++;return Promise.resolve();},createOscillator:()=>({frequency:{setValueAtTime(){}},connect(){},start(){notes++;},stop(){},disconnect(){}}),createGain:()=>({gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}})},$:()=>({textContent:''}),window:{}};
+vm.createContext(audio);vm.runInContext(source.slice(source.indexOf('function unlockAudio('),source.indexOf('function saveGame(')),audio);
+audio.beep('drop');assert.equal(notes,2);audio.beep('merge',2);assert.equal(notes,5);audio.beep('end');assert.equal(notes,8);audio.sound=false;audio.beep('drop');assert.equal(notes,8);audio.sound=true;audio.audioContext.state='suspended';audio.beep('drop');assert.equal(resumes,1);assert.equal(notes,8,'wait for user gesture to unlock audio');
+console.log('PASS: saved round restoration, ended round, corrupt storage, quota error, sound patterns and mute');
+
+(async()=>{
+  const fullUI={fullscreen:{},status:{}},full={document:{fullscreenElement:null,documentElement:{requestFullscreen:async()=>{full.document.fullscreenElement={};}},exitFullscreen:async()=>{full.document.fullscreenElement=null;}},$:id=>fullUI[id]};
+  vm.createContext(full);vm.runInContext(source.slice(source.indexOf("$('fullscreen').onclick="),source.indexOf("document.addEventListener('fullscreenchange'")),full);
+  await fullUI.fullscreen.onclick();assert(full.document.fullscreenElement);
+  await fullUI.fullscreen.onclick();assert.equal(full.document.fullscreenElement,null);
+  full.document.documentElement.requestFullscreen=undefined;await fullUI.fullscreen.onclick();assert.match(fullUI.status.textContent,/不支持/);
+  full.document.documentElement.requestFullscreen=async()=>{throw new Error('denied');};await fullUI.fullscreen.onclick();assert.match(fullUI.status.textContent,/未允许/);
+  console.log('PASS: fullscreen entry, exit, unsupported and rejected requests');
+})().catch(error=>{console.error(error);process.exitCode=1;});

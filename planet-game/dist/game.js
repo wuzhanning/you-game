@@ -1,8 +1,8 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
-let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=false,audioContext,particles=[],discovered=new Set([0]);
-try{best=Math.max(0,Number(localStorage.getItem('planet-best'))||0);}catch{}
+let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=true,audioContext,particles=[],discovered=new Set([0]);
+try{const n=Number(localStorage.getItem('planet-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch{}
 $('best').textContent=best;
 function circle(c,x,y,r,color){c.fillStyle=color;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();}
 function planet(c,l,x,y,r){
@@ -32,15 +32,52 @@ function update(){
   $('progress').style.width=count/5*100+'%';$('progress-text').textContent=discovered.has(4)?'地球已发现，继续探索吧！':'已发现 '+count+' / 5 种星球';
   [...$('planet-list').children].forEach((el,i)=>{el.className='planet-item '+(discovered.has(i)?'active':'locked');});drawSmall($('next'),nextLevel,15);
 }
-function beep(l){if(!sound)return;try{audioContext??=new(window.AudioContext||window.webkitAudioContext)();audioContext.resume();const o=audioContext.createOscillator(),g=audioContext.createGain();o.type='sine';o.frequency.value=330*Math.pow(1.14,l);g.gain.setValueAtTime(.07,audioContext.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+.25);o.connect(g).connect(audioContext.destination);o.start();o.stop(audioContext.currentTime+.26);}catch{sound=false;$('sound').setAttribute('aria-pressed','false');}}
-function merged(b){score+=2**b.level*5;discovered.add(b.level);if(score>best){best=score;try{localStorage.setItem('planet-best',String(best));}catch{}}
-  $('status').textContent='✦ 好棒！合成了'+PLANETS[b.level].name+'，收获 '+2**b.level*5+' 颗星光';
-  for(let i=0;i<12;i++){const a=i*Math.PI/6;particles.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:36,color:PLANETS[b.level].shade});}beep(b.level);update();
+function soundButton(){
+  $('sound').setAttribute('aria-pressed',String(sound));
+  $('sound').setAttribute('aria-label',sound?'关闭音效':'开启音效');
+  $('sound').style.background=sound?'#e6ddf1':'transparent';
 }
-function drop(x=aim){if(paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=PLANETS[level].r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep(0);update();return true;}
+function unlockAudio(){
+  if(!sound)return;
+  try{audioContext??=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});
+  }catch{$('status').textContent='此浏览器暂不支持音效，仍可继续游戏';}
+}
+function beep(kind,l=0){
+  if(!sound)return;unlockAudio();if(audioContext?.state!=='running')return;
+  const notes=kind==='merge'?[440,554,659]:kind==='end'?[523,440,349]:kind==='start'?[392,523]:[300,220];
+  try{notes.forEach((frequency,i)=>{
+    const time=audioContext.currentTime+i*.09,o=audioContext.createOscillator(),g=audioContext.createGain();
+    o.type='sine';o.frequency.setValueAtTime(frequency*(kind==='merge'?1+l*.06:1),time);
+    g.gain.setValueAtTime(.001,time);g.gain.exponentialRampToValueAtTime(.055,time+.012);g.gain.exponentialRampToValueAtTime(.001,time+.18);
+    o.connect(g);g.connect(audioContext.destination);o.start(time);o.stop(time+.2);o.onended=()=>{o.disconnect();g.disconnect();};
+  });}catch{}
+}
+function saveGame(){
+  try{localStorage.setItem('planet-save',JSON.stringify({version:1,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
+    localStorage.setItem('planet-best',String(best));
+  }catch{$('save-status').textContent='浏览器存储不可用，本次进度无法保存';}
+}
+function restoreGame(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('planet-save'));
+    if(!saved)return;
+    const validLevel=n=>Number.isInteger(n)&&n>=0&&n<PLANETS.length;
+    const count=n=>Number.isSafeInteger(n)&&n>=0;
+    if(saved.version!==1||!count(saved.score)||!count(saved.best)||!validLevel(saved.level)||!validLevel(saved.nextLevel)||!Number.isFinite(saved.aim)||saved.aim<0||saved.aim>WIDTH||!count(saved.cooldown)||saved.cooldown>42||!count(saved.overTicks)||saved.overTicks>151||typeof saved.ended!=='boolean'||!Array.isArray(saved.discovered)||!saved.discovered.every(validLevel)||!Array.isArray(saved.balls)||saved.balls.length>500||!saved.balls.every(b=>b&&validLevel(b.level)&&['x','y','vx','vy'].every(k=>Number.isFinite(b[k])&&Math.abs(b[k])<10000)&&count(b.age)))throw new Error('Invalid save');
+    ({score,balls,level,nextLevel,aim,cooldown,overTicks,ended}=saved);best=Math.max(best,saved.best,score);discovered=new Set(saved.discovered);paused=!ended;
+    $('hint').style.opacity=balls.length?0:1;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';
+    setOverlay(ended?'上次旅程已完成':'欢迎回来，小宇航员！','已恢复 '+score+' 颗星光和你的星球。',ended?'再玩一次':'继续探索');
+  }catch{$('save-status').textContent='存档无法读取，已开启新旅程';}
+}
+function merged(b){score+=2**b.level*5;discovered.add(b.level);if(score>best)best=score;
+  $('status').textContent='✦ 好棒！合成了'+PLANETS[b.level].name+'，收获 '+2**b.level*5+' 颗星光';
+  for(let i=0;i<12;i++){const a=i*Math.PI/6;particles.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:36,color:PLANETS[b.level].shade});}beep('merge',b.level);update();saveGame();
+}
+function drop(x=aim){if(paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=PLANETS[level].r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep('drop');update();saveGame();return true;}
 function setOverlay(title,copy,button){$('overlay-title').textContent=title;$('overlay-copy').textContent=copy;$('resume').textContent=button;$('overlay').hidden=false;}
-function togglePause(){if(ended)return;paused=!paused;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;}
-function reset(){balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent='✧ 两颗相同的星球，会变成一颗新星球';update();}
+function togglePause(){if(ended)return;paused=!paused;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;saveGame();}
+function reset(){balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent='✧ 两颗相同的星球，会变成一颗新星球';update();saveGame();beep('start');}
 function draw(){
  ctx.clearRect(0,0,WIDTH,HEIGHT);ctx.fillStyle='#f6f2fc';ctx.fillRect(0,0,WIDTH,HEIGHT);
  for(let i=0;i<37;i++){const x=(i*137+23)%WIDTH,y=(i*193+167)%HEIGHT;ctx.fillStyle=i%3===0?'#d9cfeb':'#e7dff0';if(i%4===0){ctx.fillRect(x-3,y,7,1);ctx.fillRect(x,y-3,1,7);}else circle(ctx,x,y,1.5,ctx.fillStyle);}
@@ -95,8 +132,8 @@ function pollGamepad(elapsed){
 window.addEventListener('blur',()=>{if(!paused&&!ended)togglePause();});
 
 let previous=0,accumulator=0;
-function frame(now){const elapsed=previous?Math.min(now-previous,50):0;previous=now;pollGamepad(elapsed);if(!paused&&!ended&&!document.hidden&&!document.querySelector('dialog[open]')){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;advance(balls,merged);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-PLANETS[b.level].r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else accumulator=0;draw();requestAnimationFrame(frame);}
-function pointerX(e){const rect=canvas.getBoundingClientRect();return(e.clientX-rect.left)*WIDTH/rect.width;}
+function frame(now){const elapsed=previous?Math.min(now-previous,50):0;previous=now;pollGamepad(elapsed);if(!paused&&!ended&&!document.hidden&&!document.querySelector('dialog[open]')){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;advance(balls,merged);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-PLANETS[b.level].r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;beep('end');saveGame();setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else accumulator=0;draw();requestAnimationFrame(frame);}
+function pointerX(e){const rect=canvas.getBoundingClientRect();return Math.max(0,Math.min(WIDTH,(e.clientX-rect.left)*WIDTH/rect.width));}
 canvas.addEventListener('pointermove',e=>{aim=pointerX(e);});
 canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});aim=pointerX(e);canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',e=>{drop(pointerX(e));});
@@ -104,7 +141,18 @@ canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight',' ','Enter'].
 $('pause').onclick=togglePause;$('resume').onclick=()=>ended?reset():togglePause();
 $('restart').onclick=()=>$('restart-dialog').showModal();$('cancel-reset').onclick=()=>$('restart-dialog').close();$('confirm-reset').onclick=()=>{$('restart-dialog').close();reset();};
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('#help-dialog .close').forEach(b=>b.onclick=()=>$('help-dialog').close());
-$('sound').onclick=()=>{sound=!sound;$('sound').setAttribute('aria-pressed',String(sound));$('sound').setAttribute('aria-label',sound?'关闭音效':'开启音效');$('sound').style.background=sound?'#e6ddf1':'transparent';beep(2);};
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&!paused&&!ended)togglePause();});
+$('sound').onclick=()=>{sound=!sound;soundButton();try{localStorage.setItem('planet-sound',sound?'on':'off');}catch{}if(sound)beep('start');else audioContext?.suspend().catch(()=>{});};
+document.addEventListener('pointerdown',unlockAudio,{capture:true});
+document.addEventListener('keydown',unlockAudio,{capture:true});
+$('fullscreen').onclick=async()=>{
+  try{if(document.fullscreenElement)await document.exitFullscreen();
+    else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
+    else $('status').textContent='已铺满页面；此浏览器不支持隐藏地址栏';
+  }catch{$('status').textContent='已铺满页面，浏览器暂未允许系统全屏';}
+};
+document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'退出全屏':'全屏';});
+window.addEventListener('pagehide',saveGame);
+setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();}});
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch{}}
-update();requestAnimationFrame(frame);
+restoreGame();soundButton();update();requestAnimationFrame(frame);
