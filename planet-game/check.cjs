@@ -76,7 +76,7 @@ const bombUI={};let bombSaves=0;
 const bombState={bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
 vm.createContext(bombState);
-vm.runInContext(source.slice(source.indexOf('function merged('),source.indexOf('function draw(')),bombState);
+vm.runInContext(source.slice(source.indexOf('function merged('),source.indexOf('// Render each planet once;')),bombState);
 bombState.toggleBomb();assert(!bombState.bombMode,'no free bombs');
 bombState.merged(makePlanet(7,100,300));bombState.merged(makePlanet(7,150,300));assert.equal(bombState.bombs,2,'every Jupiter earns one bomb');
 bombState.merged(makePlanet(8,150,300));assert.equal(bombState.bombs,2,'other merges earn no bomb');
@@ -99,3 +99,14 @@ state.navigator.getGamepads=()=>[pad];pad.mapping='standard';pad.buttons.forEach
 state.toggleBomb=()=>{state.bombMode=!state.bombMode;};state.selectBombTarget=()=>{};state.bombTarget=0;state.removePlanet=()=>{bombActions++;state.bombMode=false;};
 poll();button(1,true);assert(state.bombMode);button(1,false);button(0,true);poll();assert.equal(bombActions,1);button(0,false);
 console.log('PASS: advanced merges, Jupiter rewards, exact-target removal, cancellation, gamepad confirmation, bomb persistence and old saves');
+
+let renders=0,physicsSteps=0,rafCalls=0,polls=0;
+const scheduler={document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
+  requestAnimationFrame:()=>++rafCalls,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},pollGamepad:()=>polls++,draw:()=>renders++,advance:()=>physicsSteps++,merged(){},updateBomb(){},beep(){},saveGame(){},setOverlay(){}};
+vm.createContext(scheduler);vm.runInContext(source.slice(source.indexOf('let previous=0,accumulator=0'),source.indexOf('function pointerX(')),scheduler);
+scheduler.frame(1000);scheduler.frame(1100);scheduler.frame(1200);assert.equal(renders,1,'paused board draws once');assert.equal(physicsSteps,0);
+scheduler.document.hidden=true;const beforePolls=polls,beforeRAF=rafCalls;scheduler.frame(1300);assert.equal(polls,beforePolls);assert.equal(rafCalls,beforeRAF,'hidden page schedules no frame');
+scheduler.document.hidden=false;scheduler.paused=false;scheduler.frame(2000);const first=renders;
+scheduler.frame(2008);scheduler.frame(2016);scheduler.frame(2024);assert.equal(renders,first,'high refresh display does not oversample');scheduler.frame(2034);assert.equal(renders,first+1);assert.equal(physicsSteps,2,'60Hz physics retained');
+scheduler.paused=true;scheduler.frame(2200);const pausedRenders=renders;scheduler.frame(2300);assert.equal(renders,pausedRenders);scheduler.bombTarget=1;scheduler.frame(2400);assert.equal(renders,pausedRenders+1,'changed selection repaints');
+console.log('PASS: paused redraw suppression, hidden suspension, 30fps rendering and 60Hz physics');

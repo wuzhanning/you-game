@@ -117,12 +117,22 @@ function removePlanet(index){
   for(let i=0;i<16;i++){const a=i*Math.PI/8;particles.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:36,color:PLANETS[b.level].shade});}
   $('status').textContent='✦ 已消除'+PLANETS[b.level].name+'，腾出新空间！';beep('bomb');update();saveGame();return true;
 }
+// Render each planet once; frames only copy these small cached bitmaps.
+const planetSprites=PLANETS.map((p,l)=>{
+  const image=document.createElement('canvas'),padding=36;
+  image.width=image.height=Math.ceil((p.r+padding)*2);
+  planet(image.getContext('2d'),l,image.width/2,image.height/2,p.r);
+  return image;
+});
+const background=document.createElement('canvas');background.width=WIDTH;background.height=HEIGHT;
+const bg=background.getContext('2d');bg.fillStyle='#f6f2fc';bg.fillRect(0,0,WIDTH,HEIGHT);
+for(let i=0;i<37;i++){const x=(i*137+23)%WIDTH,y=(i*193+167)%HEIGHT;bg.fillStyle=i%3===0?'#d9cfeb':'#e7dff0';if(i%4===0){bg.fillRect(x-3,y,7,1);bg.fillRect(x,y-3,1,7);}else circle(bg,x,y,1.5,bg.fillStyle);}
+function drawPlanet(l,x,y){const image=planetSprites[l];ctx.drawImage(image,x-image.width/2,y-image.height/2);}
 function draw(){
- ctx.clearRect(0,0,WIDTH,HEIGHT);ctx.fillStyle='#f6f2fc';ctx.fillRect(0,0,WIDTH,HEIGHT);
- for(let i=0;i<37;i++){const x=(i*137+23)%WIDTH,y=(i*193+167)%HEIGHT;ctx.fillStyle=i%3===0?'#d9cfeb':'#e7dff0';if(i%4===0){ctx.fillRect(x-3,y,7,1);ctx.fillRect(x,y-3,1,7);}else circle(ctx,x,y,1.5,ctx.fillStyle);}
+ ctx.drawImage(background,0,0);
  ctx.strokeStyle=overTicks>0?'#e6a0a7':'#dbd0e7';ctx.lineWidth=1;ctx.setLineDash([5,7]);ctx.beginPath();ctx.moveTo(15,LIMIT);ctx.lineTo(WIDTH-15,LIMIT);ctx.stroke();ctx.setLineDash([]);ctx.font='11px system-ui';ctx.fillStyle='#b6a7c6';ctx.fillText('星 光 线',17,LIMIT-12);
- if(!ended&&!bombMode){const r=PLANETS[level].r,x=Math.max(r+9,Math.min(WIDTH-r-9,aim));ctx.save();ctx.strokeStyle='#c6b5da';ctx.setLineDash([3,7]);ctx.beginPath();ctx.moveTo(x,65);ctx.lineTo(x,HEIGHT-12);ctx.stroke();ctx.restore();ctx.globalAlpha=cooldown>0?.35:1;planet(ctx,level,x,43,r);ctx.globalAlpha=1;ctx.fillStyle='#b6a0cc';ctx.beginPath();ctx.moveTo(x-4,10);ctx.lineTo(x+4,10);ctx.lineTo(x,15);ctx.fill();}
- for(const b of balls)planet(ctx,b.level,b.x,b.y,PLANETS[b.level].r);
+ if(!ended&&!bombMode){const r=PLANETS[level].r,x=Math.max(r+9,Math.min(WIDTH-r-9,aim));ctx.save();ctx.strokeStyle='#c6b5da';ctx.setLineDash([3,7]);ctx.beginPath();ctx.moveTo(x,65);ctx.lineTo(x,HEIGHT-12);ctx.stroke();ctx.restore();ctx.globalAlpha=cooldown>0?.35:1;drawPlanet(level,x,43);ctx.globalAlpha=1;ctx.fillStyle='#b6a0cc';ctx.beginPath();ctx.moveTo(x-4,10);ctx.lineTo(x+4,10);ctx.lineTo(x,15);ctx.fill();}
+ for(const b of balls)drawPlanet(b.level,b.x,b.y);
  if(bombMode&&balls[bombTarget]){const b=balls[bombTarget];ctx.strokeStyle='#8460b3';ctx.lineWidth=3;ctx.setLineDash([6,4]);ctx.beginPath();ctx.arc(b.x,b.y,PLANETS[b.level].r+5,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
  for(const p of particles){ctx.globalAlpha=p.life/36;circle(ctx,p.x,p.y,2.5,p.color);}ctx.globalAlpha=1;
 }
@@ -177,8 +187,22 @@ function pollGamepad(elapsed){
 }
 window.addEventListener('blur',()=>{if(!paused&&!ended)togglePause();});
 
-let previous=0,accumulator=0;
-function frame(now){const elapsed=previous?Math.min(now-previous,50):0;previous=now;pollGamepad(elapsed);if(!bombMode&&!paused&&!ended&&!document.hidden&&!document.querySelector('dialog[open]')){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;advance(balls,merged);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-PLANETS[b.level].r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;updateBomb();beep('end');saveGame();setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else accumulator=0;draw();requestAnimationFrame(frame);}
+let previous=0,accumulator=0,frameId=0,idleTimer=0,lastDrawKey='';
+function stopFrames(){cancelAnimationFrame(frameId);clearTimeout(idleTimer);frameId=0;idleTimer=0;previous=0;accumulator=0;}
+function wakeFrames(){stopFrames();if(!document.hidden)frameId=requestAnimationFrame(frame);}
+
+function frame(now){
+ if(document.hidden){stopFrames();return;}
+ // Cap painting at 30 fps even on 120/144 Hz screens; physics stays at 60 Hz.
+ if(previous&&now-previous<1000/30-1){frameId=requestAnimationFrame(frame);return;}
+ const elapsed=previous?Math.min(now-previous,50):0;previous=now;pollGamepad(elapsed);
+ const running=!bombMode&&!paused&&!ended&&!document.querySelector('dialog[open]');
+ if(running){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;advance(balls,merged);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-PLANETS[b.level].r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;updateBomb();beep('end');saveGame();setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else accumulator=0;
+ const drawKey=[paused,ended,bombMode,bombTarget,aim,balls.length].join(':');
+ if(running||drawKey!==lastDrawKey){draw();lastDrawKey=drawKey;}
+ if(running)frameId=requestAnimationFrame(frame);
+ else idleTimer=setTimeout(()=>{frameId=requestAnimationFrame(frame);},100);
+}
 function pointerX(e){const rect=canvas.getBoundingClientRect();return Math.max(0,Math.min(WIDTH,(e.clientX-rect.left)*WIDTH/rect.width));}
 canvas.addEventListener('pointermove',e=>{aim=pointerX(e);});
 canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});aim=pointerX(e);canvas.setPointerCapture(e.pointerId);});
@@ -209,8 +233,9 @@ $('fullscreen').onclick=async()=>{
   }catch{$('status').textContent='已铺满页面，浏览器暂未允许系统全屏';}
 };
 document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'退出全屏':'全屏';});
-window.addEventListener('pagehide',saveGame);
+window.addEventListener('pagehide',()=>{saveGame();stopFrames();});
+window.addEventListener('pageshow',wakeFrames);
 setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext?.suspend().catch(()=>{});}else wakeFrames();});
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch{}}
-restoreGame();soundButton();update();requestAnimationFrame(frame);
+restoreGame();soundButton();update();wakeFrames();

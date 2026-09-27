@@ -22,8 +22,9 @@ function advance(balls,onMerge){
       const a=balls[i];
       for(let j=i+1;j<balls.length;j++){
         const b=balls[j],ra=PLANETS[a.level].r,rb=PLANETS[b.level].r;
-        let dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
-        if(d>=ra+rb)continue;
+        let dx=b.x-a.x,dy=b.y-a.y;
+        if(dx*dx+dy*dy>=(ra+rb)*(ra+rb))continue;
+        let d=Math.sqrt(dx*dx+dy*dy);
         if(a.level===b.level&&a.level<PLANETS.length-1){
           const level=a.level+1,merged=makePlanet(level,(a.x+b.x)/2,(a.y+b.y)/2);
           merged.vx=(a.vx+b.vx)/2;merged.vy=Math.min(0,(a.vy+b.vy)/2);merged.age=24;
