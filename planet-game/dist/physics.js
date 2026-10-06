@@ -14,18 +14,27 @@ const PLANETS = [
 ];
 const WIDTH=480, HEIGHT=580, LIMIT=94;
 function makePlanet(level,x,y){return {level,x,y,vx:0,vy:0,age:0};}
-function advance(balls,onMerge){
+function bodySpec(level,mode='planet'){
+  if(mode!=='number')return PLANETS[level];
+  return {...PLANETS[level%PLANETS.length],name:String(level),r:Math.min(104,19+level*7)};
+}
+function bodyRadius(level,mode='planet'){return mode==='number'?Math.min(104,19+level*7):PLANETS[level].r;}
+function shakeBodies(balls,ticks){
+  const force=Math.sin((48-ticks)*Math.PI/8)*.38;
+  for(const b of balls){b.vx=Math.max(-4,Math.min(4,b.vx+force));if(ticks===48){b.vy=-2.5-(b.x%17)/17;b.age=0;}}
+}
+function advance(balls,onMerge,mode='planet'){
   for(const b of balls){b.age++;b.vy+=.14;b.vx*=.993;b.x+=b.vx;b.y+=b.vy;}
   // ponytail: O(n²) pairs suit this small board; use a spatial grid if the board grows.
   for(let pass=0;pass<6;pass++){
     for(let i=0;i<balls.length;i++){
       const a=balls[i];
       for(let j=i+1;j<balls.length;j++){
-        const b=balls[j],ra=PLANETS[a.level].r,rb=PLANETS[b.level].r;
+        const b=balls[j],ra=bodyRadius(a.level,mode),rb=bodyRadius(b.level,mode);
         let dx=b.x-a.x,dy=b.y-a.y;
         if(dx*dx+dy*dy>=(ra+rb)*(ra+rb))continue;
         let d=Math.sqrt(dx*dx+dy*dy);
-        if(a.level===b.level&&a.level<PLANETS.length-1){
+        if(a.level===b.level&&a.level<(mode==='number'?Number.MAX_SAFE_INTEGER:PLANETS.length-1)){
           const level=a.level+1,merged=makePlanet(level,(a.x+b.x)/2,(a.y+b.y)/2);
           merged.vx=(a.vx+b.vx)/2;merged.vy=Math.min(0,(a.vy+b.vy)/2);merged.age=24;
           balls.splice(j,1);balls.splice(i,1,merged);onMerge(merged);return;
@@ -37,11 +46,11 @@ function advance(balls,onMerge){
         if(velocity<0){const impulse=-velocity*1.12;a.vx-=impulse*nx*wa;a.vy-=impulse*ny*wa;b.vx+=impulse*nx*wb;b.vy+=impulse*ny*wb;}
       }
     }
-    for(const b of balls){const r=PLANETS[b.level].r;
+    for(const b of balls){const r=bodyRadius(b.level,mode);
       if(b.x<r+7){b.x=r+7;b.vx=Math.abs(b.vx)*.3;}
       if(b.x>WIDTH-r-7){b.x=WIDTH-r-7;b.vx=-Math.abs(b.vx)*.3;}
       if(b.y>HEIGHT-r-9){b.y=HEIGHT-r-9;b.vy=-Math.abs(b.vy)*.12;b.vx*=.97;}
     }
   }
 }
-if(typeof module!=='undefined')module.exports={PLANETS,makePlanet,advance,WIDTH,HEIGHT,LIMIT};
+if(typeof module!=='undefined')module.exports={bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT,LIMIT};

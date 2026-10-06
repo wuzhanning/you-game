@@ -22,3 +22,6 @@ body.play-screen{min-height:100vh;min-height:100dvh;--board-height:max(160px,min
 
 .play-screen dialog .collection{display:block;margin:18px 0;padding:12px}.play-screen dialog #planet-list{overflow-x:auto;justify-content:flex-start}.play-screen dialog .planet-item{min-width:48px}.play-screen dialog .collection h2 span{display:none}
 #bomb{min-width:58px;min-height:40px;padding:7px 10px;border-radius:12px;background:#f0e8f7;color:#755497}#bomb[aria-pressed="true"]{background:#805aab;color:#fff}#bomb:disabled{opacity:.45;cursor:default;transform:none}
+#shake{min-height:40px;padding:7px 10px;border-radius:12px;background:#e6efe8;color:#4c765c;white-space:nowrap}#shake:disabled{opacity:.45;cursor:default;transform:none}#mode-picker{font-size:14px;white-space:nowrap}.mode-choices{display:flex;flex-wrap:wrap;gap:14px;margin:20px 0}.mode-choices button{flex:1;white-space:nowrap}.game-top{gap:6px}.play-screen .game-top{height:auto;min-height:46px;flex-wrap:wrap}
+@media(max-width:650px){.play-screen .brand{font-size:0;gap:0}.play-screen .brand-icon{font-size:26px}.play-screen .game-top>span:first-child{display:none}.play-screen header{padding:0 14px}.play-screen .game-top{padding:0}.play-screen .game-top .next{gap:0}}
+@media(max-width:650px){body.play-screen{--board-height:max(160px,min(calc(100dvh - 290px),calc((100vw - 44px)*580/480)))}}
