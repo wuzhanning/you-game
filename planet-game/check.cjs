@@ -45,7 +45,7 @@ const storage=new Map(),ui={};
 const savedState={bombs:2,bombMode:false,score:60,best:90,balls:[makePlanet(2,160,400)],level:1,nextLevel:0,aim:160,cooldown:12,overTicks:0,ended:false,paused:false,discovered:new Set([0,1,2]),PLANETS,WIDTH,
   localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)||null},
   $:id=>ui[id]??=( {textContent:'',style:{}} ),setOverlay:()=>{}};
-savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
+savedState.bombGiftClaimed=false;savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
 vm.createContext(savedState);
 vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),savedState);
 savedState.saveGame();savedState.score=0;savedState.balls=[];savedState.restoreGame();
@@ -77,7 +77,7 @@ for(const [from,to] of [[8,9],[9,10]]){
 const bombUI={};let bombSaves=0;
 const bombState={bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
-bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
+bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
 vm.createContext(bombState);
 vm.runInContext(source.slice(source.indexOf('function merged('),source.indexOf('// Render each planet once;')),bombState);
 bombState.toggleBomb();assert(!bombState.bombMode,'no free bombs');
@@ -203,3 +203,14 @@ const buffered=JSON.parse(vm.runInContext(`JSON.stringify((()=>{
 })())`,app));
 assert.deepEqual(buffered,{before:1,after:2,x:250,afterPause:2,pending:null});
 console.log('PASS: short A/X taps between paints, paused short taps, single buffered drop and pause cancellation');
+
+const gift=JSON.parse(vm.runInContext(`JSON.stringify((()=>{
+  saveGame();const before=JSON.parse(localStorage.getItem(mode+'-save'));
+  const granted=grantBombGift();const after=JSON.parse(localStorage.getItem(mode+'-save'));
+  restoreGame();const duplicate=grantBombGift();
+  return {before,after,granted,duplicate};
+})())`,app));
+assert(gift.granted);assert.equal(gift.after.bombs,gift.before.bombs+100);assert.equal(gift.duplicate,false);
+const giftBefore={...gift.before},giftAfter={...gift.after};delete giftBefore.bombs;delete giftBefore.bombGiftClaimed;delete giftAfter.bombs;delete giftAfter.bombGiftClaimed;
+assert.deepEqual(giftAfter,giftBefore,'gift preserves every other saved field');
+console.log('PASS: one-time 100-bomb gift preserves score, board, items and round state');

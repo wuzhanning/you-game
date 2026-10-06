@@ -4,6 +4,7 @@ const canvas=$('game'),ctx=canvas.getContext('2d');
 let mode='planet',shakes=3,mergeCount=0,shakeTicks=0;
 try{if(localStorage.getItem('game-mode')==='number')mode='number';}catch{}
 function kind(l){return bodySpec(l,mode);}
+let bombGiftClaimed=false;
 let bombs=0,bombMode=false,bombTarget=0,pendingDrop=null;
 let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=true,audioContext,particles=[],discovered=new Set([0]);
 try{const n=Number(localStorage.getItem(mode+'-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch{}
@@ -81,7 +82,7 @@ function beep(kind,l=0){
   });}catch{}
 }
 function saveGame(){
-  try{localStorage.setItem(mode+'-save',JSON.stringify({version:1,shakes,mergeCount,shakeTicks,bombs,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
+  try{localStorage.setItem(mode+'-save',JSON.stringify({version:1,bombGiftClaimed,shakes,mergeCount,shakeTicks,bombs,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
     localStorage.setItem(mode+'-best',String(best));return true;
   }catch{$('save-status').textContent='浏览器存储不可用，本次进度无法保存';return false;}
 }
@@ -93,11 +94,25 @@ function restoreGame(){
     const count=n=>Number.isSafeInteger(n)&&n>=0;
     if((saved.shakes!==undefined&&!count(saved.shakes))||(saved.mergeCount!==undefined&&(!count(saved.mergeCount)||saved.mergeCount>4))||(saved.shakeTicks!==undefined&&(!count(saved.shakeTicks)||saved.shakeTicks>48))||(saved.bombs!==undefined&&!count(saved.bombs))||saved.version!==1||!count(saved.score)||!count(saved.best)||!validLevel(saved.level)||!validLevel(saved.nextLevel)||!Number.isFinite(saved.aim)||saved.aim<0||saved.aim>WIDTH||!count(saved.cooldown)||saved.cooldown>42||!count(saved.overTicks)||saved.overTicks>151||typeof saved.ended!=='boolean'||!Array.isArray(saved.discovered)||!saved.discovered.every(validLevel)||!Array.isArray(saved.balls)||saved.balls.length>500||!saved.balls.every(b=>b&&validLevel(b.level)&&['x','y','vx','vy'].every(k=>Number.isFinite(b[k])&&Math.abs(b[k])<10000)&&count(b.age)))throw new Error('Invalid save');
     shakes=saved.shakes??3;mergeCount=saved.mergeCount??0;shakeTicks=saved.shakeTicks??0;
-    bombs=saved.bombs??0;bombMode=false;
+    bombs=saved.bombs??0;bombMode=false;bombGiftClaimed=saved.bombGiftClaimed===true;
     ({score,balls,level,nextLevel,aim,cooldown,overTicks,ended}=saved);best=Math.max(best,saved.best,score);discovered=new Set(saved.discovered);paused=!ended;
     $('hint').style.opacity=balls.length?0:1;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';
-    setOverlay(ended?'上次旅程已完成':'欢迎回来，小宇航员！','已恢复 '+score+' 颗星光和当前进度。',ended?'再玩一次':'继续探索');
+    setOverlay(ended?'上次旅程已完成':'欢迎回来，小宇航员！','已恢复 '+score+' 颗星光和当前进度。',ended?'再玩一次':'继续探索');return true;
   }catch{$('save-status').textContent='存档无法读取，已开启新旅程';}
+}
+function grantBombGift(){
+  if(ended||bombGiftClaimed)return false;
+  try{
+    if(localStorage.getItem('bomb-gift-20261006'))return false;
+    const saved=JSON.parse(localStorage.getItem(mode+'-save'));
+    if(!saved||saved.bombGiftClaimed||!Number.isSafeInteger(bombs+100))return false;
+    // Store the gift and its receipt together before changing the live game.
+    localStorage.setItem(mode+'-save',JSON.stringify({...saved,bombs:bombs+100,bombGiftClaimed:true}));
+    bombs+=100;bombGiftClaimed=true;
+    try{localStorage.setItem('bomb-gift-20261006','claimed');}catch{}
+    $('overlay-copy').textContent='已补给 100 颗炸弹，当前分数和棋盘全部保留。';
+    return true;
+  }catch{$('save-status').textContent='炸弹补给未保存，请检查浏览器存储后重试';return false;}
 }
 function merged(b){const earned=Math.min(Number.MAX_SAFE_INTEGER,2**Math.min(b.level,50)*5);score=Math.min(Number.MAX_SAFE_INTEGER,score+earned);discovered.add(b.level);if(score>best)best=score;
   $('status').textContent='✦ 好棒！合成了'+kind(b.level).name+'，收获 '+earned+' 颗星光';
@@ -125,7 +140,7 @@ function switchMode(next){
   if(!['planet','number'].includes(next))return false;
   if(next===mode)return true;
   if(!saveGame())return false;
-  mode=next;best=0;
+  mode=next;best=0;bombGiftClaimed=false;
   try{const n=Number(localStorage.getItem(mode+'-best'));if(Number.isSafeInteger(n)&&n>=0)best=n;localStorage.setItem('game-mode',mode);}catch{}
   planetSprites.clear();lastDrawKey='';reset(false);restoreGame();buildCollection();update();return true;
 }
@@ -302,4 +317,4 @@ window.addEventListener('pageshow',wakeFrames);
 setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext?.suspend().catch(()=>{});}else wakeFrames();});
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch{}}
-restoreGame();buildCollection();soundButton();update();wakeFrames();
+if(restoreGame())grantBombGift();buildCollection();soundButton();update();wakeFrames();
