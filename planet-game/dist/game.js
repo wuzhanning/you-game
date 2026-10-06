@@ -4,7 +4,7 @@ const canvas=$('game'),ctx=canvas.getContext('2d');
 let mode='planet',shakes=3,mergeCount=0,shakeTicks=0;
 try{if(localStorage.getItem('game-mode')==='number')mode='number';}catch{}
 function kind(l){return bodySpec(l,mode);}
-let bombs=0,bombMode=false,bombTarget=0;
+let bombs=0,bombMode=false,bombTarget=0,pendingDrop=null;
 let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=true,audioContext,particles=[],discovered=new Set([0]);
 try{const n=Number(localStorage.getItem(mode+'-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch{}
 $('best').textContent=best;
@@ -105,10 +105,22 @@ function merged(b){const earned=Math.min(Number.MAX_SAFE_INTEGER,2**Math.min(b.l
   if(b.level===7){bombs++;$('status').textContent+=' · 获得 1 颗炸弹！';}
   for(let i=0;i<12;i++){const a=i*Math.PI/6;particles.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:36,color:kind(b.level).shade});}beep('merge',b.level);update();saveGame();
 }
+function requestDrop(x=aim){
+  if(bombMode||paused||ended||document.querySelector('dialog[open]'))return false;
+  if(cooldown>0){
+    pendingDrop=x;
+    $('status').textContent='已收到投放，准备好后自动放下';
+    return true;
+  }
+  return drop(x);
+}
+function flushDrop(){
+  if(cooldown===0&&pendingDrop!==null){const x=pendingDrop;pendingDrop=null;drop(x);}
+}
 function drop(x=aim){if(bombMode||paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=kind(level).r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep('drop');update();saveGame();return true;}
 function setOverlay(title,copy,button){$('overlay-title').textContent=title;$('overlay-copy').textContent=copy;$('resume').textContent=button;$('overlay').hidden=false;}
-function togglePause(){if(ended)return;bombMode=false;paused=!paused;updateBomb();$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;saveGame();}
-function reset(persist=true){shakes=3;mergeCount=0;shakeTicks=0;bombs=0;bombMode=false;bombTarget=0;balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent=mode==='number'?'✧ 两个相同数字合成下一个数字':'✧ 两颗相同的星球，会变成一颗新星球';update();if(persist){saveGame();beep('start');}}
+function togglePause(){if(ended)return;pendingDrop=null;bombMode=false;paused=!paused;updateBomb();$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;saveGame();}
+function reset(persist=true){pendingDrop=null;shakes=3;mergeCount=0;shakeTicks=0;bombs=0;bombMode=false;bombTarget=0;balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent=mode==='number'?'✧ 两个相同数字合成下一个数字':'✧ 两颗相同的星球，会变成一颗新星球';update();if(persist){saveGame();beep('start');}}
 function switchMode(next){
   if(!['planet','number'].includes(next))return false;
   if(next===mode)return true;
@@ -135,7 +147,7 @@ function updateBomb(){
 function toggleBomb(){
   if(paused||ended||document.querySelector('dialog[open]'))return;
   if(!bombMode&&(bombs===0||balls.length===0))return;
-  bombMode=!bombMode;bombTarget=0;updateBomb();
+  pendingDrop=null;bombMode=!bombMode;bombTarget=0;updateBomb();
   $('status').textContent=bombMode?'点选星球消除；← → 选目标，A / 空格确认，B 取消':'已取消消除，继续投放吧';
 }
 function selectBombTarget(direction){
@@ -218,7 +230,7 @@ function pollGamepad(elapsed){
       const direction=buttons[14]||buttons[15]?Number(!!buttons[15])-Number(!!buttons[14]):stick;
       const r=kind(level).r;
       aim=Math.max(r+9,Math.min(WIDTH-r-9,aim+direction*300*elapsed/1000));
-      if(pressed(0))drop();
+      if(pressed(0))requestDrop();
     }
   }
   // Always sample held buttons, including while dialogs or another window have focus.
@@ -226,46 +238,53 @@ function pollGamepad(elapsed){
 }
 window.addEventListener('blur',()=>{if(!paused&&!ended)togglePause();});
 
-let previous=0,accumulator=0,frameId=0,idleTimer=0,lastDrawKey='';
-function stopFrames(){cancelAnimationFrame(frameId);clearTimeout(idleTimer);frameId=0;idleTimer=0;previous=0;accumulator=0;}
+let previous=0,accumulator=0,frameId=0,idleTimer=0,lastDrawKey='',previousInput=0;
+function stopFrames(){cancelAnimationFrame(frameId);clearTimeout(idleTimer);frameId=0;idleTimer=0;previous=0;previousInput=0;accumulator=0;}
 function wakeFrames(){stopFrames();if(!document.hidden)frameId=requestAnimationFrame(frame);}
 
 function frame(now){
  if(document.hidden){stopFrames();return;}
+ // Read button edges every display frame, independently of the paint throttle.
+ const inputElapsed=previousInput?Math.min(now-previousInput,50):0;previousInput=now;pollGamepad(inputElapsed);
  // Cap painting at 30 fps even on 120/144 Hz screens; physics stays at 60 Hz.
  if(previous&&now-previous<1000/30-1){frameId=requestAnimationFrame(frame);return;}
- const elapsed=previous?Math.min(now-previous,50):0;previous=now;pollGamepad(elapsed);
+ const elapsed=previous?Math.min(now-previous,50):0;previous=now;
  const running=!bombMode&&!paused&&!ended&&!document.querySelector('dialog[open]');
- if(running){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;if(shakeTicks>0){shakeBodies(balls,shakeTicks);shakeTicks--;if(shakeTicks===0)updateBomb();}advance(balls,merged,mode);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-kind(b.level).r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;updateBomb();beep('end');saveGame();setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else accumulator=0;
+ if(running){accumulator+=elapsed;while(accumulator>=1000/60){accumulator-=1000/60;if(cooldown>0)cooldown--;flushDrop();if(shakeTicks>0){shakeBodies(balls,shakeTicks);shakeTicks--;if(shakeTicks===0)updateBomb();}advance(balls,merged,mode);for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life--;}particles=particles.filter(p=>p.life>0);const overflow=balls.some(b=>b.age>160&&b.y-kind(b.level).r<LIMIT);overTicks=overflow?overTicks+1:0;if(overTicks>150){ended=true;updateBomb();beep('end');saveGame();setOverlay('这次旅程，真棒！','你收集了 '+score+' 颗星光。准备好探索新的宇宙了吗？','再玩一次');accumulator=0;break;}}}else {accumulator=0;pendingDrop=null;}
  const drawKey=[mode,paused,ended,bombMode,bombTarget,aim,balls.length].join(':');
  if(running||drawKey!==lastDrawKey){draw();lastDrawKey=drawKey;}
- if(running)frameId=requestAnimationFrame(frame);
+ if(running||padKey!==null)frameId=requestAnimationFrame(frame);
  else idleTimer=setTimeout(()=>{frameId=requestAnimationFrame(frame);},100);
 }
 function pointerX(e){const rect=canvas.getBoundingClientRect();return Math.max(0,Math.min(WIDTH,(e.clientX-rect.left)*WIDTH/rect.width));}
 canvas.addEventListener('pointermove',e=>{aim=pointerX(e);});
 canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});aim=pointerX(e);canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointerup',e=>{
-  if(!bombMode){drop(pointerX(e));return;}
+  if(!bombMode){requestDrop(pointerX(e));return;}
   const rect=canvas.getBoundingClientRect(),x=(e.clientX-rect.left)*WIDTH/rect.width,y=(e.clientY-rect.top)*HEIGHT/rect.height;
   const index=balls.findLastIndex(b=>Math.hypot(b.x-x,b.y-y)<=kind(b.level).r);
   removePlanet(index);
 });
-canvas.addEventListener('keydown',e=>{
+document.addEventListener('keydown',e=>{
+  const target=e.target;
+  if(document.querySelector('dialog[open]')||target?.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target?.tagName))return;
+  if(target?.tagName==='BUTTON'&&[' ','Enter'].includes(e.key))return;
   if(['s','S'].includes(e.key)){e.preventDefault();if(!e.repeat)useShake();return;}
   if(['m','M'].includes(e.key)){e.preventDefault();if(!e.repeat)$('mode-dialog').showModal();return;}
   if(['b','B','Escape'].includes(e.key)){e.preventDefault();if(!e.repeat&&(e.key!=='Escape'||bombMode))toggleBomb();return;}
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter'].includes(e.key))return;
   e.preventDefault();
   if(bombMode){if(e.key.startsWith('Arrow'))selectBombTarget(['ArrowLeft','ArrowUp'].includes(e.key)?-1:1);else if(!e.repeat)removePlanet(bombTarget);return;}
-  if(e.key==='ArrowLeft')aim=Math.max(35,aim-18);else if(e.key==='ArrowRight')aim=Math.min(WIDTH-35,aim+18);else if(!e.repeat&&(e.key===' '||e.key==='Enter'))drop();
+  if(e.key==='ArrowLeft')aim=Math.max(35,aim-18);else if(e.key==='ArrowRight')aim=Math.min(WIDTH-35,aim+18);else if(!e.repeat&&(e.key===' '||e.key==='Enter'))requestDrop();
 });
 $('shake').onclick=()=>{useShake();canvas.focus({preventScroll:true});};
 $('mode-picker').onclick=()=>$('mode-dialog').showModal();
 document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>{if(switchMode(button.dataset.mode))$('mode-dialog').close();});
 $('close-mode').onclick=()=>$('mode-dialog').close();
 $('bomb').onclick=()=>{toggleBomb();canvas.focus({preventScroll:true});};
-$('pause').onclick=togglePause;$('resume').onclick=()=>ended?reset():togglePause();
+$('pause').onclick=()=>{togglePause();canvas.focus({preventScroll:true});};$('resume').onclick=()=>{ended?reset():togglePause();canvas.focus({preventScroll:true});};
+document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>canvas.focus({preventScroll:true})));
+window.addEventListener('focus',wakeFrames);
 $('restart').onclick=()=>$('restart-dialog').showModal();$('cancel-reset').onclick=()=>$('restart-dialog').close();$('confirm-reset').onclick=()=>{$('restart-dialog').close();reset();};
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('#help-dialog .close').forEach(b=>b.onclick=()=>$('help-dialog').close());
 $('sound').onclick=()=>{sound=!sound;soundButton();try{localStorage.setItem('planet-sound',sound?'on':'off');}catch{}if(sound)beep('start');else audioContext?.suspend().catch(()=>{});};

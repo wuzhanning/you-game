@@ -18,7 +18,7 @@ const source=fs.readFileSync(__dirname+'/dist/game.js','utf8');
 const pad={index:0,id:'test controller',connected:true,mapping:'standard',axes:[0],buttons:Array.from({length:16},()=>({pressed:false}))};
 let pads=[pad],focused=true,drops=0,restarts=0,message={textContent:''};
 const state={navigator:{getGamepads:()=>pads},document:{hidden:false,hasFocus:()=>focused,querySelector:()=>null},$:()=>message,PLANETS,WIDTH,level:0,aim:240,paused:false,ended:false,bombMode:false};
-state.drop=()=>drops++;
+state.drop=()=>drops++;state.requestDrop=state.drop;
 state.togglePause=()=>{if(!state.ended)state.paused=!state.paused;};
 state.reset=()=>{restarts++;state.paused=false;state.ended=false;};
 state.mode='planet';state.shakes=3;state.mergeCount=0;state.shakeTicks=0;state.kind=l=>bodySpec(l,state.mode);
@@ -104,7 +104,7 @@ poll();button(1,true);assert(state.bombMode);button(1,false);button(0,true);poll
 console.log('PASS: advanced merges, Jupiter rewards, exact-target removal, cancellation, gamepad confirmation, bomb persistence and old saves');
 
 let renders=0,physicsSteps=0,rafCalls=0,polls=0;
-const scheduler={document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
+const scheduler={pendingDrop:null,flushDrop(){},padKey:null,document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
   requestAnimationFrame:()=>++rafCalls,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},pollGamepad:()=>polls++,draw:()=>renders++,advance:()=>physicsSteps++,merged(){},updateBomb(){},beep(){},saveGame(){},setOverlay(){}};
 scheduler.mode='planet';scheduler.shakes=3;scheduler.mergeCount=0;scheduler.shakeTicks=0;scheduler.kind=l=>bodySpec(l,scheduler.mode);
 vm.createContext(scheduler);vm.runInContext(source.slice(source.indexOf('let previous=0,accumulator=0'),source.indexOf('function pointerX(')),scheduler);
@@ -181,3 +181,25 @@ const randomDrops=vm.runInContext(`(()=>{
 })()`,app);
 assert.deepEqual(JSON.parse(randomDrops),[[0,true],[1,true],[2,true]]);
 console.log('PASS: numeric random 0/1/2 generation and next-preview consumption');
+
+// A/X presses between rendered frames must still be sampled.
+const quickPad={index:0,id:'quick-pad',connected:true,mapping:'standard',axes:[0],buttons:Array.from({length:16},()=>({pressed:false}))};
+let quickDrops=0,quickShakes=0;
+scheduler.WIDTH=WIDTH;scheduler.navigator={getGamepads:()=>[quickPad]};scheduler.document.hasFocus=()=>true;scheduler.$=()=>({textContent:''});scheduler.kind=l=>bodySpec(l,'planet');scheduler.level=0;
+scheduler.requestDrop=()=>quickDrops++;scheduler.useShake=()=>quickShakes++;scheduler.togglePause=()=>{scheduler.paused=!scheduler.paused;};
+vm.runInContext(source.slice(source.indexOf('const STICK_DEADZONE='),source.indexOf("window.addEventListener('blur'")),scheduler);
+scheduler.paused=false;scheduler.frame(3000);const renderedBeforeTap=renders;
+quickPad.buttons[0].pressed=true;scheduler.frame(3010);quickPad.buttons[0].pressed=false;scheduler.frame(3020);
+quickPad.buttons[2].pressed=true;scheduler.frame(3025);quickPad.buttons[2].pressed=false;scheduler.frame(3030);
+assert.equal(quickDrops,1);assert.equal(quickShakes,1);assert.equal(renders,renderedBeforeTap,'input does not force extra painting');
+scheduler.paused=true;scheduler.frame(3100);quickPad.buttons[0].pressed=true;scheduler.frame(3110);assert(!scheduler.paused,'short A resumes paused game');scheduler.frame(3200);assert.equal(quickDrops,1,'holding resume cannot drop');
+const buffered=JSON.parse(vm.runInContext(`JSON.stringify((()=>{
+  reset(false);requestDrop(100);
+  requestDrop(200);requestDrop(250);
+  const before=balls.length;cooldown=0;flushDrop();flushDrop();
+  const after=balls.length,x=balls[1].x;
+  requestDrop(300);togglePause();togglePause();cooldown=0;flushDrop();
+  return {before,after,x,afterPause:balls.length,pending:pendingDrop};
+})())`,app));
+assert.deepEqual(buffered,{before:1,after:2,x:250,afterPause:2,pending:null});
+console.log('PASS: short A/X taps between paints, paused short taps, single buffered drop and pause cancellation');
