@@ -136,7 +136,7 @@ const modeStorage=new Map();bombState.localStorage={getItem:k=>modeStorage.get(k
 vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),bombState);
 bombState.score=100;bombState.best=150;bombState.bombs=2;bombState.shakes=4;
 assert(bombState.switchMode('number'));assert.equal(bombState.score,0);assert.equal(bombState.best,0);assert.equal(bombState.shakes,3);assert.equal(bombState.balls.length,0);
-assert(bombState.drop());assert.equal(bombState.balls[0].level,0);assert.equal(bombState.level,0);assert.equal(bombState.nextLevel,0);
+assert(bombState.drop());assert.equal(bombState.balls[0].level,0);assert.equal(bombState.level,0);assert([0,1,2].includes(bombState.nextLevel));
 bombState.score=200;bombState.best=220;bombState.shakes=1;bombState.balls=[makePlanet(12,200,400)];
 assert(bombState.switchMode('planet'));assert.equal(bombState.score,100);assert.equal(bombState.best,150);assert.equal(bombState.bombs,2);assert.equal(bombState.shakes,4);
 assert(bombState.switchMode('number'));assert.equal(bombState.score,200);assert.equal(bombState.balls[0].level,12);assert.equal(bombState.best,220);assert.equal(bombState.shakes,1);
@@ -164,3 +164,20 @@ assert.match(nodes['mode-picker'].textContent,/数字/);assert.equal(vm.runInCon
 vm.runInContext("useShake();shakeBodies(balls,shakeTicks);switchMode('planet');switchMode('number');draw();",app);
 assert.equal(vm.runInContext('balls[0].level',app),1);assert.equal(vm.runInContext('shakes',app),2);assert.equal(vm.runInContext('shakeTicks',app),48);
 console.log('PASS: complete app startup, numeric rendering, real merge callbacks and mode round-trip');
+
+// Verify the actual shared drop path samples all three levels and consumes its preview.
+const randomDrops=vm.runInContext(`(()=>{
+  const originalRandom=Math.random;
+  try{
+    mode='number';reset(false);
+    const results=[];
+    for(const sample of [0,.5,.999999]){
+      Math.random=()=>sample;cooldown=0;
+      const preview=nextLevel;drop();
+      results.push([nextLevel,level===preview]);
+    }
+    return JSON.stringify(results);
+  }finally{Math.random=originalRandom;}
+})()`,app);
+assert.deepEqual(JSON.parse(randomDrops),[[0,true],[1,true],[2,true]]);
+console.log('PASS: numeric random 0/1/2 generation and next-preview consumption');
