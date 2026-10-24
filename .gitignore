@@ -5,3 +5,6 @@
 node_modules/
 planet-game/.openai/
 .sites-runtime/
+android-tv/build/
+android-tv/.debug.keystore
+android-tv/releases/*.idsig

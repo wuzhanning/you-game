@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT}=require('./dist/physics.js');
+const {baseMode,isGlyphMode,glyphShapes,setGlyphShape,bodyBounds,hitBody,contact,bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT}=require('./dist/physics.js');
 let balls=[makePlanet(0,100,400),makePlanet(0,130,400)],merges=[];
 advance(balls,b=>merges.push(b.level));assert.equal(balls.length,1);assert.deepEqual(merges,[1]);
 balls=[makePlanet(0,100,400),makePlanet(1,132,400)];advance(balls,()=>assert.fail('different planets cannot merge'));assert.equal(balls.length,2);
@@ -22,6 +22,7 @@ state.drop=()=>drops++;state.requestDrop=state.drop;
 state.togglePause=()=>{if(!state.ended)state.paused=!state.paused;};
 state.reset=()=>{restarts++;state.paused=false;state.ended=false;};
 state.mode='planet';state.shakes=3;state.mergeCount=0;state.shakeTicks=0;state.kind=l=>bodySpec(l,state.mode);
+state.baseMode=baseMode;state.bodyBounds=bodyBounds;
 vm.createContext(state);
 vm.runInContext(source.slice(source.indexOf('const STICK_DEADZONE='),source.indexOf("window.addEventListener('blur'")),state);
 const poll=(ms=16)=>state.pollGamepad(ms);
@@ -46,6 +47,7 @@ const savedState={bombs:2,bombMode:false,score:60,best:90,balls:[makePlanet(2,16
   localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)||null},
   $:id=>ui[id]??=( {textContent:'',style:{}} ),setOverlay:()=>{}};
 savedState.shakeGiftClaimed=false;savedState.bombGiftClaimed=false;savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
+savedState.baseMode=baseMode;savedState.bodyBounds=bodyBounds;
 vm.createContext(savedState);
 vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),savedState);
 savedState.saveGame();savedState.score=0;savedState.balls=[];savedState.restoreGame();
@@ -78,6 +80,7 @@ const bombUI={};let bombSaves=0;
 const bombState={bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
 bombState.shakeGiftClaimed=false;bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
+bombState.baseMode=baseMode;bombState.bodyBounds=bodyBounds;
 vm.createContext(bombState);
 vm.runInContext(source.slice(source.indexOf('function merged('),source.indexOf('// Render each planet once;')),bombState);
 bombState.toggleBomb();assert(!bombState.bombMode,'no free bombs');
@@ -107,6 +110,7 @@ let renders=0,physicsSteps=0,rafCalls=0,polls=0;
 const scheduler={pendingDrop:null,flushDrop(){},padKey:null,document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
   requestAnimationFrame:()=>++rafCalls,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},pollGamepad:()=>polls++,draw:()=>renders++,advance:()=>physicsSteps++,merged(){},updateBomb(){},beep(){},saveGame(){},setOverlay(){}};
 scheduler.mode='planet';scheduler.shakes=3;scheduler.mergeCount=0;scheduler.shakeTicks=0;scheduler.kind=l=>bodySpec(l,scheduler.mode);
+scheduler.baseMode=baseMode;scheduler.bodyBounds=bodyBounds;
 vm.createContext(scheduler);vm.runInContext(source.slice(source.indexOf('let previous=0,accumulator=0'),source.indexOf('function pointerX(')),scheduler);
 scheduler.frame(1000);scheduler.frame(1100);scheduler.frame(1200);assert.equal(renders,1,'paused board draws once');assert.equal(physicsSteps,0);
 scheduler.document.hidden=true;const beforePolls=polls,beforeRAF=rafCalls;scheduler.frame(1300);assert.equal(polls,beforePolls);assert.equal(rafCalls,beforeRAF,'hidden page schedules no frame');
@@ -237,3 +241,33 @@ vm.runInContext("switchMode('number');switchMode('letter');draw();",app);
 assert.equal(vm.runInContext('balls[0].level',app),1);assert.equal(vm.runInContext('score',app),10);assert(vm.runInContext('paused',app));
 const letterSaved=JSON.parse(browserStorage.get('letter-save'));assert.equal(letterSaved.balls[0].level,1);
 console.log('PASS: all A–Z merges, Z limit, different letters, letter rendering and independent save');
+
+const ringPixels=new Uint8ClampedArray(32*32*4),dotPixels=new Uint8ClampedArray(32*32*4);
+for(let y=5;y<=26;y++)for(let x=5;x<=26;x++)if(x===5||x===26||y===5||y===26)ringPixels[(y*32+x)*4+3]=255;
+dotPixels[(15*32+15)*4+3]=255;
+for(const mode of ['number-glyph','letter-glyph']){
+  setGlyphShape(0,mode,ringPixels);setGlyphShape(1,mode,dotPixels);
+  const outer=makePlanet(0,150,350),inner=makePlanet(1,150,350);
+  assert.equal(hitBody(outer,150,350,mode),false,'glyph holes are not solid circles');
+  assert.equal(contact(outer,inner,mode),null,'a shape inside a hole must not collide');
+  const pair=[makePlanet(0,150,350),makePlanet(0,150,350)];advance(pair,()=>{},mode);assert.equal(pair.length,1);assert.equal(pair[0].level,1);
+  assert.equal(bodySpec(1,mode).name,mode==='letter-glyph'?'B':'1');
+  const edge=[makePlanet(0,-20,HEIGHT+20)];advance(edge,()=>{},mode);const bounds=bodyBounds(0,mode);
+  assert(edge[0].x+bounds.left>=7);assert(edge[0].y+bounds.bottom<=HEIGHT-9);
+}
+fakeCanvas.getImageData=()=>({data:ringPixels});
+vm.runInContext("switchMode('number-glyph');balls=[makePlanet(0,150,350),makePlanet(0,150,350)];advance(balls,merged,mode);draw();saveGame();switchMode('letter-glyph');draw();switchMode('number-glyph');",app);
+assert.equal(vm.runInContext('balls[0].level',app),1);assert.match(nodes['mode-picker'].textContent,/字形/);
+console.log('PASS: non-circular contours, hollow hit testing, glyph merging, walls and independent saves');
+
+const tvButtons=[0,1,2].map(()=>({disabled:false,focus(){tv.document.activeElement=this;},click(){this.clicked=true;}}));
+let tvDialog=null,tvDrops=0,tvBombs=0,tvShakes=0;
+const tvMenu={showModal(){tvDialog=this;tvButtons[0].focus();},close(){tvDialog=null;},querySelectorAll:()=>tvButtons};
+const tv={URLSearchParams,location:{search:'?tv=1'},window:{},document:{body:{classList:{add(){}}},querySelector:()=>tvDialog,querySelectorAll:()=>[]},$:id=>id==='tv-menu'?tvMenu:{},unlockAudio(){},paused:false,ended:false,bombMode:false,aim:240,WIDTH:480,togglePause(){tv.paused=!tv.paused;},requestDrop(){tvDrops++;},toggleBomb(){tvBombs++;},useShake(){tvShakes++;},reset(){tv.ended=false;},removePlanet(){},selectBombTarget(){}};
+vm.createContext(tv);vm.runInContext(fs.readFileSync(__dirname+'/dist/tv.js','utf8'),tv);
+tv.window.tvInput('ok');assert.equal(tvDrops,1);tv.window.tvInput('right');assert.equal(tv.aim,258);
+tv.window.tvInput('bomb');tv.window.tvInput('shake');assert.equal(tvBombs,1);assert.equal(tvShakes,1);
+tv.window.tvInput('menu');tv.window.tvInput('right');tv.window.tvInput('ok');assert(tvButtons[1].clicked);assert.equal(tvDrops,1);
+tv.window.tvInput('back');assert.equal(tvDialog,null);assert(tv.window.tvInput('back'));assert(tv.paused);assert.equal(tv.window.tvInput('back'),false);
+tv.window.tvInput('ok');assert(!tv.paused);assert.equal(tvDrops,1);
+console.log('PASS: TV remote movement, drop, items, modal focus, pause, resume and exit');

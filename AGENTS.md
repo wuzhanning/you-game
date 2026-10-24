@@ -5,3 +5,4 @@
 - Preserve unrelated work, never force-push, and report authentication or remote conflicts rather than claiming synchronization succeeded.
 - Game source is in planet-game/dist. Run `node planet-game/check.cjs` and `node --check planet-game/dist/game.js` before pushing game changes.
 - Refresh planet-game/星球碰碰乐-H5.zip from the files in planet-game/dist when game assets change.
+- After game assets or Android TV sources change, run `node --check planet-game/dist/tv.js` and `python3 android-tv/build.py` to refresh `android-tv/releases/YouGame-TV-debug.apk`. Preserve the local signing key; never commit it.
