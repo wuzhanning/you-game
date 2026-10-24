@@ -26,8 +26,11 @@ if BUILD.exists():
 (BUILD / 'classes').mkdir(parents=True)
 (BUILD / 'dex').mkdir()
 OUT.parent.mkdir(exist_ok=True)
-run(TOOLS / 'aapt', 'package', '-f', '-M', ROOT / 'AndroidManifest.xml', '-S', ROOT / 'res', '-A', ROOT.parent / 'planet-game/dist', '-I', ANDROID, '-F', BUILD / 'base.apk')
-run(JAVA / 'bin/javac', '--release', '8', '-g', '-encoding', 'UTF-8', '-classpath', ANDROID, '-d', BUILD / 'classes', *sorted((ROOT / 'src').rglob('*.java')))
+shutil.copytree(ROOT.parent / 'planet-game/dist', BUILD / 'assets')
+shutil.copytree(ROOT.parent / 'native-games/assets', BUILD / 'assets', dirs_exist_ok=True)
+run(TOOLS / 'aapt', 'package', '-f', '-M', ROOT / 'AndroidManifest.xml', '-S', ROOT / 'res', '-A', BUILD / 'assets', '-I', ANDROID, '-F', BUILD / 'base.apk')
+sources = sorted((ROOT / 'src').rglob('*.java')) + sorted((ROOT.parent / 'native-games/src').rglob('*.java'))
+run(JAVA / 'bin/javac', '--release', '8', '-g', '-encoding', 'UTF-8', '-classpath', ANDROID, '-d', BUILD / 'classes', *sources)
 run(TOOLS / 'd8', '--lib', ANDROID, '--min-api', '26', '--output', BUILD / 'dex', *sorted((BUILD / 'classes').rglob('*.class')))
 with zipfile.ZipFile(BUILD / 'base.apk', 'a', zipfile.ZIP_DEFLATED) as apk:
     for dex in (BUILD / 'dex').glob('*.dex'):
