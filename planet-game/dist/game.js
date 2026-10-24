@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
 let mode='planet',shakes=3,mergeCount=0,shakeTicks=0;
-try{const savedMode=localStorage.getItem('game-mode');if(['number','letter','number-glyph','letter-glyph'].includes(savedMode))mode=savedMode;}catch{}
+try{const savedMode=localStorage.getItem('game-mode');if(['number','letter','number-glyph','letter-glyph'].includes(savedMode))mode=savedMode;}catch(error){}
 function kind(l){
   if(isGlyphMode(mode)&&!glyphShapes.has(mode+':'+l)){
     const mask=document.createElement('canvas');mask.width=mask.height=32;
@@ -18,7 +18,7 @@ function paintGlyph(c,l,x,y,r,selectedMode,color){
 let bombGiftClaimed=false,shakeGiftClaimed=false;
 let bombs=0,bombMode=false,bombTarget=0,pendingDrop=null;
 let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=true,audioContext,particles=[],discovered=new Set([0]);
-try{const n=Number(localStorage.getItem(mode+'-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch{}
+try{const n=Number(localStorage.getItem(mode+'-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch(error){}
 $('best').textContent=best;
 function circle(c,x,y,r,color){c.fillStyle=color;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();}
 function planet(c,l,x,y,r){
@@ -56,7 +56,7 @@ function planet(c,l,x,y,r){
 }
 function drawSmall(el,l,r=20){const c=el.getContext('2d');c.clearRect(0,0,el.width,el.height);planet(c,l,el.width/2,el.height/2,r);}
 function buildCollection(){
-$('planet-list').replaceChildren();
+$('planet-list').textContent='';
 for(let l=0;l<(baseMode(mode)==='letter'?26:PLANETS.length);l++){const item=document.createElement('div');item.className='planet-item';item.innerHTML='<canvas width="112" height="112"></canvas><span></span>';$('planet-list').append(item);item.querySelector('span').textContent=kind(l).name;drawSmall(item.querySelector('canvas'),l,l===6?32:37);}
 }
 const goal=document.createElement('canvas');goal.width=180;goal.height=180;goal.style.width='90px';goal.style.height='90px';$('goal-art').append(goal);drawSmall(goal,4,63);
@@ -79,24 +79,24 @@ function soundButton(){
 }
 function unlockAudio(){
   if(!sound)return;
-  try{audioContext??=new(window.AudioContext||window.webkitAudioContext)();
+  try{if(!audioContext)audioContext=new(window.AudioContext||window.webkitAudioContext)();
     if(audioContext.state==='suspended')audioContext.resume().catch(()=>{});
-  }catch{$('status').textContent='此浏览器暂不支持音效，仍可继续游戏';}
+  }catch(error){$('status').textContent='此浏览器暂不支持音效，仍可继续游戏';}
 }
 function beep(kind,l=0){
-  if(!sound)return;unlockAudio();if(audioContext?.state!=='running')return;
+  if(!sound)return;unlockAudio();if((!audioContext||audioContext.state!=='running'))return;
   const notes=kind==='shake'?[294,392,294]:kind==='bomb'?[220,165,110]:kind==='merge'?[440,554,659]:kind==='end'?[523,440,349]:kind==='start'?[392,523]:[300,220];
   try{notes.forEach((frequency,i)=>{
     const time=audioContext.currentTime+i*.09,o=audioContext.createOscillator(),g=audioContext.createGain();
     o.type='sine';o.frequency.setValueAtTime(frequency*(kind==='merge'?1+Math.min(l,30)*.06:1),time);
     g.gain.setValueAtTime(.001,time);g.gain.exponentialRampToValueAtTime(.055,time+.012);g.gain.exponentialRampToValueAtTime(.001,time+.18);
     o.connect(g);g.connect(audioContext.destination);o.start(time);o.stop(time+.2);o.onended=()=>{o.disconnect();g.disconnect();};
-  });}catch{}
+  });}catch(error){}
 }
 function saveGame(){
   try{localStorage.setItem(mode+'-save',JSON.stringify({version:1,bombGiftClaimed,shakeGiftClaimed,shakes,mergeCount,shakeTicks,bombs,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
     localStorage.setItem(mode+'-best',String(best));return true;
-  }catch{$('save-status').textContent='浏览器存储不可用，本次进度无法保存';return false;}
+  }catch(error){$('save-status').textContent='浏览器存储不可用，本次进度无法保存';return false;}
 }
 function restoreGame(){
   try{
@@ -105,12 +105,12 @@ function restoreGame(){
     const validLevel=n=>Number.isSafeInteger(n)&&n>=0&&(baseMode(mode)==='number'?true:baseMode(mode)==='letter'?n<26:n<PLANETS.length);
     const count=n=>Number.isSafeInteger(n)&&n>=0;
     if((saved.shakes!==undefined&&!count(saved.shakes))||(saved.mergeCount!==undefined&&(!count(saved.mergeCount)||saved.mergeCount>4))||(saved.shakeTicks!==undefined&&(!count(saved.shakeTicks)||saved.shakeTicks>48))||(saved.bombs!==undefined&&!count(saved.bombs))||saved.version!==1||!count(saved.score)||!count(saved.best)||!validLevel(saved.level)||!validLevel(saved.nextLevel)||!Number.isFinite(saved.aim)||saved.aim<0||saved.aim>WIDTH||!count(saved.cooldown)||saved.cooldown>42||!count(saved.overTicks)||saved.overTicks>151||typeof saved.ended!=='boolean'||!Array.isArray(saved.discovered)||!saved.discovered.every(validLevel)||!Array.isArray(saved.balls)||saved.balls.length>500||!saved.balls.every(b=>b&&validLevel(b.level)&&['x','y','vx','vy'].every(k=>Number.isFinite(b[k])&&Math.abs(b[k])<10000)&&count(b.age)))throw new Error('Invalid save');
-    shakes=saved.shakes??3;mergeCount=saved.mergeCount??0;shakeTicks=saved.shakeTicks??0;
-    bombs=saved.bombs??0;bombMode=false;bombGiftClaimed=saved.bombGiftClaimed===true;shakeGiftClaimed=saved.shakeGiftClaimed===true;
+    shakes=saved.shakes===undefined?3:saved.shakes;mergeCount=saved.mergeCount===undefined?0:saved.mergeCount;shakeTicks=saved.shakeTicks===undefined?0:saved.shakeTicks;
+    bombs=saved.bombs===undefined?0:saved.bombs;bombMode=false;bombGiftClaimed=saved.bombGiftClaimed===true;shakeGiftClaimed=saved.shakeGiftClaimed===true;
     ({score,balls,level,nextLevel,aim,cooldown,overTicks,ended}=saved);best=Math.max(best,saved.best,score);discovered=new Set(saved.discovered);paused=!ended;
     $('hint').style.opacity=balls.length?0:1;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';
     setOverlay(ended?'上次旅程已完成':'欢迎回来，小宇航员！','已恢复 '+score+' 颗星光和当前进度。',ended?'再玩一次':'继续探索');return true;
-  }catch{$('save-status').textContent='存档无法读取，已开启新旅程';}
+  }catch(error){$('save-status').textContent='存档无法读取，已开启新旅程';}
 }
 function grantBombGift(){
   if(ended||bombGiftClaimed)return false;
@@ -121,10 +121,10 @@ function grantBombGift(){
     // Store the gift and its receipt together before changing the live game.
     localStorage.setItem(mode+'-save',JSON.stringify({...saved,bombs:bombs+100,bombGiftClaimed:true}));
     bombs+=100;bombGiftClaimed=true;
-    try{localStorage.setItem('bomb-gift-20261006','claimed');}catch{}
+    try{localStorage.setItem('bomb-gift-20261006','claimed');}catch(error){}
     $('overlay-copy').textContent='已补给 100 颗炸弹，当前分数和棋盘全部保留。';
     return true;
-  }catch{$('save-status').textContent='炸弹补给未保存，请检查浏览器存储后重试';return false;}
+  }catch(error){$('save-status').textContent='炸弹补给未保存，请检查浏览器存储后重试';return false;}
 }
 function grantShakeGift(){
   if(ended||shakeGiftClaimed)return false;
@@ -135,10 +135,10 @@ function grantShakeGift(){
     // Store the gift and its receipt together before changing the live game.
     localStorage.setItem(mode+'-save',JSON.stringify({...saved,shakes:shakes+1000,shakeGiftClaimed:true}));
     shakes+=1000;shakeGiftClaimed=true;
-    try{localStorage.setItem('shake-gift-202610006','claimed');}catch{}
+    try{localStorage.setItem('shake-gift-202610006','claimed');}catch(error){}
     $('overlay-copy').textContent='已补给 1000 次摇一摇，当前分数和棋盘全部保留。';
     return true;
-  }catch{$('save-status').textContent='摇一摇补给未保存，请检查浏览器存储后重试';return false;}
+  }catch(error){$('save-status').textContent='摇一摇补给未保存，请检查浏览器存储后重试';return false;}
 }
 function merged(b){const earned=Math.min(Number.MAX_SAFE_INTEGER,2**Math.min(b.level,50)*5);score=Math.min(Number.MAX_SAFE_INTEGER,score+earned);discovered.add(b.level);if(score>best)best=score;
   $('status').textContent='✦ 好棒！合成了'+kind(b.level).name+'，收获 '+earned+' 颗星光';
@@ -167,13 +167,13 @@ function switchMode(next){
   if(next===mode)return true;
   if(!saveGame())return false;
   mode=next;best=0;bombGiftClaimed=false;shakeGiftClaimed=false;
-  try{const n=Number(localStorage.getItem(mode+'-best'));if(Number.isSafeInteger(n)&&n>=0)best=n;localStorage.setItem('game-mode',mode);}catch{}
+  try{const n=Number(localStorage.getItem(mode+'-best'));if(Number.isSafeInteger(n)&&n>=0)best=n;localStorage.setItem('game-mode',mode);}catch(error){}
   planetSprites.clear();lastDrawKey='';reset(false);restoreGame();buildCollection();update();return true;
 }
 function useShake(){
   if(shakes<1||shakeTicks>0||bombMode||paused||ended||balls.length===0||document.querySelector('dialog[open]'))return false;
   shakes--;shakeTicks=48;overTicks=0;
-  if(!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)canvas.parentElement.animate?.([{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(5px)'},{transform:'translateX(-3px)'},{transform:'translateX(0)'}],{duration:600});
+  if(window.matchMedia&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches&&canvas.parentElement.animate)canvas.parentElement.animate([{transform:'translateX(0)'},{transform:'translateX(-5px)'},{transform:'translateX(5px)'},{transform:'translateX(-3px)'},{transform:'translateX(0)'}],{duration:600});
   $('status').textContent='↔ 摇一摇，让相同的小伙伴靠近！';beep('shake');updateBomb();saveGame();return true;
 }
 function updateBomb(){
@@ -235,7 +235,7 @@ function pollGamepad(elapsed){
     return;
   }
   let pads=[];
-  try{pads=Array.from(navigator.getGamepads?.()||[]).filter(p=>p?.connected);}catch{}
+  try{pads=Array.from(navigator.getGamepads?navigator.getGamepads():[]).filter(p=>p&&p.connected);}catch(error){}
   const pad=pads.find(p=>p.mapping==='standard');
   const key=pad?pad.index+':'+pad.id:null;
   const message=pad?'手柄已连接 · 左摇杆 / 方向键移动 · A / × 投放 · B 炸弹 · X 摇一摇 · Select 模式 · Start 暂停':pads.length?'此手柄按键布局未识别，请使用标准手柄模式':'手柄未就绪 · 连接后按一下手柄按键';
@@ -251,13 +251,13 @@ function pollGamepad(elapsed){
       if(pressed(1)||pressed(9))dialog.close();
       else if(pressed(0)){
         const focused=document.activeElement;
-        if(focused?.tagName==='BUTTON'&&dialog.contains(focused))focused.click();
-        else dialog.querySelector('button')?.focus();
+        if((focused&&focused.tagName)==='BUTTON'&&dialog.contains(focused))focused.click();
+        else {const first=dialog.querySelector('button');if(first)first.focus();}
       }
       const choices=[...dialog.querySelectorAll('button')];
       if(pressed(14)||pressed(15)){
         const index=choices.indexOf(document.activeElement);
-        choices[(index+(pressed(14)?-1:1)+choices.length)%choices.length]?.focus();
+        const choice=choices[(index+(pressed(14)?-1:1)+choices.length)%choices.length];if(choice)choice.focus();
       }
     }else if(pressed(8)){$('mode-dialog').showModal();}
     else if(pressed(9)){togglePause();}
@@ -307,13 +307,13 @@ canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preve
 canvas.addEventListener('pointerup',e=>{
   if(!bombMode){requestDrop(pointerX(e));return;}
   const rect=canvas.getBoundingClientRect(),x=(e.clientX-rect.left)*WIDTH/rect.width,y=(e.clientY-rect.top)*HEIGHT/rect.height;
-  const index=balls.findLastIndex(b=>hitBody(b,x,y,mode));
+  let index=balls.length-1;while(index>=0&&!hitBody(balls[index],x,y,mode))index--;
   removePlanet(index);
 });
 document.addEventListener('keydown',e=>{
   const target=e.target;
-  if(document.querySelector('dialog[open]')||target?.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target?.tagName))return;
-  if(target?.tagName==='BUTTON'&&[' ','Enter'].includes(e.key))return;
+  if(document.querySelector('dialog[open]')||(target&&target.isContentEditable)||['INPUT','TEXTAREA','SELECT'].includes((target&&target.tagName)))return;
+  if((target&&target.tagName)==='BUTTON'&&[' ','Enter'].includes(e.key))return;
   if(['s','S'].includes(e.key)){e.preventDefault();if(!e.repeat)useShake();return;}
   if(['m','M'].includes(e.key)){e.preventDefault();if(!e.repeat)$('mode-dialog').showModal();return;}
   if(['b','B','Escape'].includes(e.key)){e.preventDefault();if(!e.repeat&&(e.key!=='Escape'||bombMode))toggleBomb();return;}
@@ -332,19 +332,19 @@ document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('clo
 window.addEventListener('focus',wakeFrames);
 $('restart').onclick=()=>$('restart-dialog').showModal();$('cancel-reset').onclick=()=>$('restart-dialog').close();$('confirm-reset').onclick=()=>{$('restart-dialog').close();reset();};
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('#help-dialog .close').forEach(b=>b.onclick=()=>$('help-dialog').close());
-$('sound').onclick=()=>{sound=!sound;soundButton();try{localStorage.setItem('planet-sound',sound?'on':'off');}catch{}if(sound)beep('start');else audioContext?.suspend().catch(()=>{});};
+$('sound').onclick=()=>{sound=!sound;soundButton();try{localStorage.setItem('planet-sound',sound?'on':'off');}catch(error){}if(sound)beep('start');else audioContext&&audioContext.suspend().catch(()=>{});};
 document.addEventListener('pointerdown',unlockAudio,{capture:true});
 document.addEventListener('keydown',unlockAudio,{capture:true});
 $('fullscreen').onclick=async()=>{
   try{if(document.fullscreenElement)await document.exitFullscreen();
     else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();
     else $('status').textContent='已铺满页面；此浏览器不支持隐藏地址栏';
-  }catch{$('status').textContent='已铺满页面，浏览器暂未允许系统全屏';}
+  }catch(error){$('status').textContent='已铺满页面，浏览器暂未允许系统全屏';}
 };
 document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'退出全屏':'全屏';});
 window.addEventListener('pagehide',()=>{saveGame();stopFrames();});
 window.addEventListener('pageshow',wakeFrames);
 setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext?.suspend().catch(()=>{});}else wakeFrames();});
-if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch{}}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext&&audioContext.suspend().catch(()=>{});}else wakeFrames();});
+if(document.modelContext&&document.modelContext.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch(error){}}
 if(restoreGame()){grantBombGift();grantShakeGift();}buildCollection();soundButton();update();wakeFrames();

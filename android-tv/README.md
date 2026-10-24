@@ -1,12 +1,14 @@
 # Android TV 版
 
-安装包：[YouGame-TV-debug.apk](releases/YouGame-TV-debug.apk)。Android 8.0 及以上，需要支持现代 Canvas、dialog 的系统 Android System WebView。复制 APK 到电视，通过电视文件管理器安装；也可通过已授权的 ADB 执行：
+安装包：[YouGame-TV-debug.apk](releases/YouGame-TV-debug.apk)。Android 8.0 及以上，需要支持 Canvas、dialog 的系统 Android System WebView；已适配小米电视内置的 WebView 66。复制 APK 到电视，通过电视文件管理器安装；也可通过已授权的 ADB 执行：
 
 ```sh
 adb install -r android-tv/releases/YouGame-TV-debug.apk
 ```
 
 从电视应用列表打开「星球碰碰乐」。内置完整游戏，离线运行，不需要本机 HTTP 服务。横屏全屏，包含五种模式；分数、棋盘和道具保存在电视本机，退出后继续。电视与电脑浏览器存档独立；卸载或清除应用数据会删除电视存档。
+
+电视遥控器和蓝牙手柄均可使用。游戏主界面优先显示遥控器提示，手柄快捷键见「玩法与图鉴」。手柄需先在电视系统的蓝牙设置中配对并连接。
 
 | 输入 | 操作 |
 | --- | --- |
@@ -33,4 +35,6 @@ python3 android-tv/build.py
 
 ## 验证范围
 
-自动检查覆盖字形轮廓、合成、存档和遥控器状态切换。Android 35 ARM64 普通模拟器已验证安装启动、遥控器菜单、字形数字投放和合成、覆盖安装存档保留、暂停恢复，以及 TV 启动入口。未在实体 Android TV 或实体蓝牙手柄上完成测试；音效听感和不同电视 WebView 兼容性仍需真机确认。
+自动检查覆盖字形轮廓、合成、存档和遥控器状态切换。Android 35 ARM64 普通模拟器已验证安装启动、遥控器菜单、字形数字投放和合成、覆盖安装存档保留、暂停恢复，以及 TV 启动入口。
+
+2026-10-24 在小米 MiTV-ASTP0（Android 9 / WebView 66.0.3359.158）安装验证：修复旧 WebView 的脚本语法和网页接口兼容问题，确认横屏棋盘、字形字母模式、分数和遥控器提示正常显示，并发送确认键及手柄 A 键事件。该电视当时只检测到小米蓝牙遥控器，没有连接的游戏手柄；实体手柄的蓝牙连接、摇杆和音效听感尚未完成实测。随后 ADB 连接离线，未继续验证遥控器菜单完整流程和真机重启恢复。

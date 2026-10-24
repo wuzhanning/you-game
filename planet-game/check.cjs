@@ -155,6 +155,7 @@ function element(tag='div'){
   const el={tagName:tag.toUpperCase(),width:112,height:112,children:[],style:{},dataset:{},textContent:'',hidden:false,
     getContext:()=>fakeCanvas,setAttribute(){},addEventListener(){},focus(){},append(child){this.children.push(child);},replaceChildren(){this.children=[];},
     querySelector(selector){return this.parts[selector]??=(element(selector));},parts:{},close(){this.open=false;},showModal(){this.open=true;}};
+  Object.defineProperty(el,'textContent',{get(){return this.text||'';},set(value){this.text=value;this.children=[];}});
   return el;
 }
 const nodes=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],element()]));
@@ -263,8 +264,10 @@ console.log('PASS: non-circular contours, hollow hit testing, glyph merging, wal
 const tvButtons=[0,1,2].map(()=>({disabled:false,focus(){tv.document.activeElement=this;},click(){this.clicked=true;}}));
 let tvDialog=null,tvDrops=0,tvBombs=0,tvShakes=0;
 const tvMenu={showModal(){tvDialog=this;tvButtons[0].focus();},close(){tvDialog=null;},querySelectorAll:()=>tvButtons};
-const tv={URLSearchParams,location:{search:'?tv=1'},window:{},document:{body:{classList:{add(){}}},querySelector:()=>tvDialog,querySelectorAll:()=>[]},$:id=>id==='tv-menu'?tvMenu:{},unlockAudio(){},paused:false,ended:false,bombMode:false,aim:240,WIDTH:480,togglePause(){tv.paused=!tv.paused;},requestDrop(){tvDrops++;},toggleBomb(){tvBombs++;},useShake(){tvShakes++;},reset(){tv.ended=false;},removePlanet(){},selectBombTarget(){}};
+const tvNodes={};
+const tv={innerHeight:540,innerWidth:960,URLSearchParams,location:{search:'?tv=1'},window:{addEventListener(){}},document:{body:{style:{setProperty(){}},classList:{add(){}}},querySelector:()=>tvDialog,querySelectorAll:()=>[]},$:id=>id==='tv-menu'?tvMenu:(tvNodes[id]||(tvNodes[id]={})),unlockAudio(){},paused:false,ended:false,bombMode:false,aim:240,WIDTH:480,togglePause(){tv.paused=!tv.paused;},requestDrop(){tvDrops++;},toggleBomb(){tvBombs++;},useShake(){tvShakes++;},reset(){tv.ended=false;},removePlanet(){},selectBombTarget(){}};
 vm.createContext(tv);vm.runInContext(fs.readFileSync(__dirname+'/dist/tv.js','utf8'),tv);
+assert(tvNodes['gamepad-status'].textContent);assert.doesNotMatch(tvNodes['gamepad-status'].textContent,/B |X /);assert.match(tvNodes['help-gamepad'].textContent,/Start/);
 tv.window.tvInput('ok');assert.equal(tvDrops,1);tv.window.tvInput('right');assert.equal(tv.aim,258);
 tv.window.tvInput('bomb');tv.window.tvInput('shake');assert.equal(tvBombs,1);assert.equal(tvShakes,1);
 tv.window.tvInput('menu');tv.window.tvInput('right');tv.window.tvInput('ok');assert(tvButtons[1].clicked);assert.equal(tvDrops,1);

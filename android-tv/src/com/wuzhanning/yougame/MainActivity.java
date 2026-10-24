@@ -36,7 +36,12 @@ public class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
             @Override public void onPageFinished(WebView view, String url) { ready = true; }
         });
-        web.setWebChromeClient(new WebChromeClient());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                android.util.Log.d("YouGame", message.message() + " @ " + message.sourceId() + ":" + message.lineNumber());
+                return true;
+            }
+        });
         setContentView(web);
         web.loadUrl("https://" + HOST + "/index.html?tv=1");
     }

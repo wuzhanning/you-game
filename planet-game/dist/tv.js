@@ -1,19 +1,26 @@
 // The native TV shell forwards remote/gamepad input here; no network or JS bridge.
 (function(){
   if(!new URLSearchParams(location.search).has('tv'))return;
+  // Older TV WebViews do not support CSS min/max or dynamic viewport units.
+  function fitTV(){document.body.style.setProperty('--board-height',Math.max(160,Math.min(innerHeight-200,(innerWidth-260)*580/480))+'px');}
+  fitTV();window.addEventListener('resize',fitTV);
   window.nativeTV=true;window.tvAxis=0;document.body.classList.add('tv');
-  $('gamepad-status').textContent='← → 移动 · 确认投放 · ↑ 菜单 · B 炸弹 · X 摇一摇 · 返回暂停';
+  $('gamepad-status').textContent='遥控器：左右移动 · 确认投放 · 上下打开菜单使用道具 · 返回暂停';
+  $('hint').textContent='遥控器：左右选位置，确认键投放';
+  $('help-intro').textContent='电视遥控器：左右方向键选择位置，确认键投放。两颗相同的星球碰在一起，就会合成更大的星球！';
+  $('help-controls').textContent='遥控器：上下方向键打开操作菜单，可选择炸弹、摇一摇、模式和重新开始。菜单内方向键选择，确认执行，返回关闭。游戏中返回键暂停，暂停后确认继续，再按返回退出。';
+  $('help-gamepad').textContent='TV 版也支持蓝牙手柄：左摇杆或方向键移动，A 投放，B 炸弹，X 摇一摇，Start 暂停，Select 打开操作菜单。菜单内方向键选择，A 确认，B 返回。';
   window.tvInput=function(action){
     unlockAudio();
     const dialog=document.querySelector('dialog[open]');
     if(dialog){
-      if(action==='back'||action==='menu'){dialog.close();return true;}
+      if(action==='back'||action==='menu'||action==='bomb'){dialog.close();return true;}
       const buttons=[...dialog.querySelectorAll('button')].filter(b=>!b.disabled);
       if(['left','right','up','down'].includes(action)){
         const index=buttons.indexOf(document.activeElement),step=['left','up'].includes(action)?-1:1;
-        buttons[(index+step+buttons.length)%buttons.length]?.focus();
+        const next=buttons[(index+step+buttons.length)%buttons.length];if(next)next.focus();
       }else if(action==='ok'){
-        const button=buttons.includes(document.activeElement)?document.activeElement:buttons[0];button?.click();
+        const button=buttons.includes(document.activeElement)?document.activeElement:buttons[0];if(button)button.click();
       }
       return true;
     }

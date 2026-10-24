@@ -29,3 +29,5 @@ body.play-screen{min-height:100vh;min-height:100dvh;--board-height:max(160px,min
 
 .tv.play-screen .layout{flex-direction:row;align-items:flex-start}.tv.play-screen .left{width:180px;flex-shrink:0}.tv.play-screen .game-card{flex:1}.tv.play-screen .score-card{display:block}.tv.play-screen #score{margin:12px 0}.tv.play-screen .best{margin:12px 0}.tv.play-screen header{height:48px}.tv.play-screen main{padding-top:5px}.tv dialog{padding:20px 28px;max-height:90dvh}.tv dialog h2{margin:8px 0 16px}.tv dialog p{font-size:15px;margin:12px 0}.tv-actions{gap:12px}.tv dialog button{min-height:44px;padding:10px 18px;font-size:18px}
 .tv #overlay{padding:12px}.tv #overlay .overlay-star{font-size:26px}.tv #overlay h2{font-size:20px;margin:8px 0}.tv #overlay p{font-size:12px;margin:8px 0}.tv #overlay .primary{padding:8px 16px}
+
+.tv dialog{max-height:90vh}.tv .header-actions>*{margin-left:10px}.tv .game-top>*{margin-right:6px}.tv .mode-choices button{margin:7px}.tv #gamepad-status{line-height:1.4}
