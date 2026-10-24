@@ -224,3 +224,16 @@ assert(shakeGift.granted);assert.equal(shakeGift.after.shakes,shakeGift.before.s
 const shakeBefore={...shakeGift.before},shakeAfter={...shakeGift.after};delete shakeBefore.shakes;delete shakeBefore.shakeGiftClaimed;delete shakeAfter.shakes;delete shakeAfter.shakeGiftClaimed;
 assert.deepEqual(shakeAfter,shakeBefore,'shake gift preserves all other progress');
 console.log('PASS: one-time 1000-shake gift and unchanged progress');
+
+for(let l=0;l<25;l++){
+  const pair=[makePlanet(l,190,350),makePlanet(l,210,350)];advance(pair,()=>{},'letter');
+  assert.equal(pair.length,1);assert.equal(bodySpec(pair[0].level,'letter').name,String.fromCharCode(66+l));
+}
+const lastLetters=[makePlanet(25,170,400),makePlanet(25,300,400)];advance(lastLetters,()=>assert.fail('Z must remain Z'),'letter');assert.equal(lastLetters.length,2);
+const differentLetters=[makePlanet(0,100,400),makePlanet(1,110,400)];advance(differentLetters,()=>assert.fail('different letters merged'),'letter');assert.equal(differentLetters.length,2);
+vm.runInContext("switchMode('letter');balls=[makePlanet(0,150,350),makePlanet(0,170,350)];advance(balls,merged,mode);draw();saveGame();",app);
+assert.equal(nodes['planet-list'].children.length,26);assert.match(nodes['mode-picker'].textContent,/字母/);assert.equal(vm.runInContext('kind(balls[0].level).name',app),'B');
+vm.runInContext("switchMode('number');switchMode('letter');draw();",app);
+assert.equal(vm.runInContext('balls[0].level',app),1);assert.equal(vm.runInContext('score',app),10);assert(vm.runInContext('paused',app));
+const letterSaved=JSON.parse(browserStorage.get('letter-save'));assert.equal(letterSaved.balls[0].level,1);
+console.log('PASS: all A–Z merges, Z limit, different letters, letter rendering and independent save');

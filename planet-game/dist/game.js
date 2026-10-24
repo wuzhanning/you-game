@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
 let mode='planet',shakes=3,mergeCount=0,shakeTicks=0;
-try{if(localStorage.getItem('game-mode')==='number')mode='number';}catch{}
+try{const savedMode=localStorage.getItem('game-mode');if(['number','letter'].includes(savedMode))mode=savedMode;}catch{}
 function kind(l){return bodySpec(l,mode);}
 let bombGiftClaimed=false,shakeGiftClaimed=false;
 let bombs=0,bombMode=false,bombTarget=0,pendingDrop=null;
@@ -12,9 +12,9 @@ $('best').textContent=best;
 function circle(c,x,y,r,color){c.fillStyle=color;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();}
 function planet(c,l,x,y,r){
   const p=kind(l);c.save();c.translate(x,y);
-  if(mode==='number'){
+  if(mode!=='planet'){
     circle(c,0,0,r,p.color);c.strokeStyle=p.shade;c.lineWidth=2;c.beginPath();c.arc(0,0,r-1,0,Math.PI*2);c.stroke();
-    c.fillStyle='#302941';c.textAlign='center';c.textBaseline='middle';c.font='bold '+Math.min(r*.95,r*1.5/String(l).length)+'px system-ui';c.fillText(String(l),0,r*.04);c.restore();return;
+    c.fillStyle='#302941';c.textAlign='center';c.textBaseline='middle';c.font='bold '+Math.min(r*.95,r*1.5/p.name.length)+'px system-ui';c.fillText(p.name,0,r*.04);c.restore();return;
   }
   if(l===10){
     c.save();c.rotate(-.35);c.strokeStyle='#bea2ef';c.lineWidth=r*.14;c.beginPath();c.ellipse(0,0,r*.92,r*.57,0,0,Math.PI*2);c.stroke();
@@ -45,17 +45,17 @@ function planet(c,l,x,y,r){
 function drawSmall(el,l,r=20){const c=el.getContext('2d');c.clearRect(0,0,el.width,el.height);planet(c,l,el.width/2,el.height/2,r);}
 function buildCollection(){
 $('planet-list').replaceChildren();
-for(let l=0;l<PLANETS.length;l++){const item=document.createElement('div');item.className='planet-item';item.innerHTML='<canvas width="112" height="112"></canvas><span></span>';$('planet-list').append(item);item.querySelector('span').textContent=kind(l).name;drawSmall(item.querySelector('canvas'),l,l===6?32:37);}
+for(let l=0;l<(mode==='letter'?26:PLANETS.length);l++){const item=document.createElement('div');item.className='planet-item';item.innerHTML='<canvas width="112" height="112"></canvas><span></span>';$('planet-list').append(item);item.querySelector('span').textContent=kind(l).name;drawSmall(item.querySelector('canvas'),l,l===6?32:37);}
 }
 const goal=document.createElement('canvas');goal.width=180;goal.height=180;goal.style.width='90px';goal.style.height='90px';$('goal-art').append(goal);drawSmall(goal,4,63);
 const demo=$('demo').getContext('2d');planet(demo,1,32,36,19);planet(demo,1,89,36,19);planet(demo,2,180,36,26);demo.font='18px system-ui';demo.fillStyle='#b0a4b9';demo.fillText('+',57,41);demo.fillText('→',125,41);
 function update(){
   updateBomb();
   $('score').innerHTML=score+'<span>颗</span>';$('best').textContent=best;
-  $('found').textContent=mode==='number'?'最大数字 '+Math.max(...discovered):discovered.size+' / '+PLANETS.length+' 已发现';
-  $('mode-picker').textContent=mode==='number'?'数字模式 ▾':'星球模式 ▾';
-  canvas.setAttribute('aria-label',mode==='number'?'数字合成游戏。方向键移动，空格投放，S 摇一摇，B 炸弹，M 切换模式。':'星球合成游戏。方向键移动，空格投放，S 摇一摇，B 炸弹，M 切换模式。');
-  $('collection-title').textContent=mode==='number'?'数字成长图鉴（可继续升级）':'星球成长图鉴';
+  $('found').textContent=mode==='letter'?'最高字母 '+kind(Math.max(...discovered)).name:mode==='number'?'最大数字 '+Math.max(...discovered):discovered.size+' / '+PLANETS.length+' 已发现';
+  $('mode-picker').textContent=mode==='letter'?'字母模式 ▾':mode==='number'?'数字模式 ▾':'星球模式 ▾';
+  canvas.setAttribute('aria-label',mode==='letter'?'字母合成游戏。方向键移动，空格投放，S 摇一摇，B 炸弹，M 切换模式。':mode==='number'?'数字合成游戏。方向键移动，空格投放，S 摇一摇，B 炸弹，M 切换模式。':'星球合成游戏。方向键移动，空格投放，S 摇一摇，B 炸弹，M 切换模式。');
+  $('collection-title').textContent=mode==='letter'?'字母成长图鉴 A–Z':mode==='number'?'数字成长图鉴（可继续升级）':'星球成长图鉴';
   const count=[0,1,2,3,4].filter(l=>discovered.has(l)).length;
   $('progress').style.width=count/5*100+'%';$('progress-text').textContent=discovered.has(4)?'地球已发现，继续探索吧！':'已发现 '+count+' / 5 种星球';
   [...$('planet-list').children].forEach((el,i)=>{el.className='planet-item '+(discovered.has(i)?'active':'locked');});drawSmall($('next'),nextLevel,15);
@@ -90,7 +90,7 @@ function restoreGame(){
   try{
     const saved=JSON.parse(localStorage.getItem(mode+'-save'));
     if(!saved)return;
-    const validLevel=n=>Number.isSafeInteger(n)&&n>=0&&(mode==='number'?true:n<PLANETS.length);
+    const validLevel=n=>Number.isSafeInteger(n)&&n>=0&&(mode==='number'?true:mode==='letter'?n<26:n<PLANETS.length);
     const count=n=>Number.isSafeInteger(n)&&n>=0;
     if((saved.shakes!==undefined&&!count(saved.shakes))||(saved.mergeCount!==undefined&&(!count(saved.mergeCount)||saved.mergeCount>4))||(saved.shakeTicks!==undefined&&(!count(saved.shakeTicks)||saved.shakeTicks>48))||(saved.bombs!==undefined&&!count(saved.bombs))||saved.version!==1||!count(saved.score)||!count(saved.best)||!validLevel(saved.level)||!validLevel(saved.nextLevel)||!Number.isFinite(saved.aim)||saved.aim<0||saved.aim>WIDTH||!count(saved.cooldown)||saved.cooldown>42||!count(saved.overTicks)||saved.overTicks>151||typeof saved.ended!=='boolean'||!Array.isArray(saved.discovered)||!saved.discovered.every(validLevel)||!Array.isArray(saved.balls)||saved.balls.length>500||!saved.balls.every(b=>b&&validLevel(b.level)&&['x','y','vx','vy'].every(k=>Number.isFinite(b[k])&&Math.abs(b[k])<10000)&&count(b.age)))throw new Error('Invalid save');
     shakes=saved.shakes??3;mergeCount=saved.mergeCount??0;shakeTicks=saved.shakeTicks??0;
@@ -149,9 +149,9 @@ function flushDrop(){
 function drop(x=aim){if(bombMode||paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=kind(level).r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep('drop');update();saveGame();return true;}
 function setOverlay(title,copy,button){$('overlay-title').textContent=title;$('overlay-copy').textContent=copy;$('resume').textContent=button;$('overlay').hidden=false;}
 function togglePause(){if(ended)return;pendingDrop=null;bombMode=false;paused=!paused;updateBomb();$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;saveGame();}
-function reset(persist=true){pendingDrop=null;shakes=3;mergeCount=0;shakeTicks=0;bombs=0;bombMode=false;bombTarget=0;balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent=mode==='number'?'✧ 两个相同数字合成下一个数字':'✧ 两颗相同的星球，会变成一颗新星球';update();if(persist){saveGame();beep('start');}}
+function reset(persist=true){pendingDrop=null;shakes=3;mergeCount=0;shakeTicks=0;bombs=0;bombMode=false;bombTarget=0;balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent=mode==='letter'?'✧ 两个相同字母合成下一个字母，向 Z 出发！':mode==='number'?'✧ 两个相同数字合成下一个数字':'✧ 两颗相同的星球，会变成一颗新星球';update();if(persist){saveGame();beep('start');}}
 function switchMode(next){
-  if(!['planet','number'].includes(next))return false;
+  if(!['planet','number','letter'].includes(next))return false;
   if(next===mode)return true;
   if(!saveGame())return false;
   mode=next;best=0;bombGiftClaimed=false;shakeGiftClaimed=false;

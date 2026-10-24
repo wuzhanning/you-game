@@ -15,10 +15,10 @@ const PLANETS = [
 const WIDTH=480, HEIGHT=580, LIMIT=94;
 function makePlanet(level,x,y){return {level,x,y,vx:0,vy:0,age:0};}
 function bodySpec(level,mode='planet'){
-  if(mode!=='number')return PLANETS[level];
-  return {...PLANETS[level%PLANETS.length],name:String(level),r:Math.min(104,19+level*7)};
+  if(mode==='planet')return PLANETS[level];
+  return {...PLANETS[level%PLANETS.length],name:mode==='letter'?String.fromCharCode(65+level):String(level),r:Math.min(104,19+level*7)};
 }
-function bodyRadius(level,mode='planet'){return mode==='number'?Math.min(104,19+level*7):PLANETS[level].r;}
+function bodyRadius(level,mode='planet'){return mode!=='planet'?Math.min(104,19+level*7):PLANETS[level].r;}
 function shakeBodies(balls,ticks){
   const force=Math.sin((48-ticks)*Math.PI/8)*.38;
   for(const b of balls){b.vx=Math.max(-4,Math.min(4,b.vx+force));if(ticks===48){b.vy=-2.5-(b.x%17)/17;b.age=0;}}
@@ -34,7 +34,7 @@ function advance(balls,onMerge,mode='planet'){
         let dx=b.x-a.x,dy=b.y-a.y;
         if(dx*dx+dy*dy>=(ra+rb)*(ra+rb))continue;
         let d=Math.sqrt(dx*dx+dy*dy);
-        if(a.level===b.level&&a.level<(mode==='number'?Number.MAX_SAFE_INTEGER:PLANETS.length-1)){
+        if(a.level===b.level&&a.level<(mode==='number'?Number.MAX_SAFE_INTEGER:mode==='letter'?25:PLANETS.length-1)){
           const level=a.level+1,merged=makePlanet(level,(a.x+b.x)/2,(a.y+b.y)/2);
           merged.vx=(a.vx+b.vx)/2;merged.vy=Math.min(0,(a.vy+b.vy)/2);merged.age=24;
           balls.splice(j,1);balls.splice(i,1,merged);onMerge(merged);return;
