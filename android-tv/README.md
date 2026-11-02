@@ -4,6 +4,15 @@
 
 原生游戏：方向键选游戏、确认进入，游戏内返回 / 菜单打开暂停菜单。可继续存档、选择已解锁关卡、查看玩法、重玩、回大厅及开关音效。首次进入游戏先确认出发。切到后台会停止计时与绘制，恢复后确认继续。六款游戏的具体按键及关卡见 [原生游戏说明](../native-games/README.md)，设备验证范围见 [测试记录](../native-games/QA.md)。
 
+## 真机连接
+
+当前小米 MiTV-ASTP0（Android 9）的 ADB 地址为 `192.168.0.29:5555`，由用户于 2026-11-02 更新，替代原地址 `192.168.0.35:5555`。电视需开启并授权 ADB，电脑和电视需在同一局域网。
+
+```sh
+adb connect 192.168.0.29:5555
+adb -s 192.168.0.29:5555 install -r android-tv/releases/YouGame-TV-debug.apk
+```
+
 ## 原有星球游戏
 
 安装包：[YouGame-TV-debug.apk](releases/YouGame-TV-debug.apk)。Android 8.0 及以上，需要支持 Canvas、dialog 的系统 Android System WebView；已适配小米电视内置的 WebView 66。复制 APK 到电视，通过电视文件管理器安装；也可通过已授权的 ADB 执行：
