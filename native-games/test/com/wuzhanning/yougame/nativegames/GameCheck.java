@@ -148,5 +148,76 @@ public final class GameCheck {
         Game g=empty(Game.MERGE); for(int i=0;i<Game.CAPACITY;i++) check(g.add(Game.ORB,400,200,2,30,30)!=null,"pool slot exists");
         check(g.add(Game.ORB,400,200,2,30,30)==null,"pool cannot grow without bounds");
     }
-    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); savesAndBounds(); System.out.println("Arcade checks passed: "+checks); }
+    private static void logicRegressions() {
+        Game g=empty(Game.RUN); g.value=100; g.invincible=1;
+        g.add(Game.WALL,1,0,0,1,1); g.add(Game.WALL,1,.1f,0,1,1); advance(g,17);
+        check(g.value==100 && g.hp==3,"invulnerability protects number as well as hearts");
+        g.invincible=0; g.add(Game.WALL,1,g.progress,0,1,1); advance(g,17);
+        check(g.value==75 && g.hp==2,"one real hit reduces number exactly once");
+
+        g=empty(Game.RUN); g.hp=1; g.add(Game.WALL,1,0,0,1,1); g.add(Game.FOOD,1,0,100,1,1); advance(g,17);
+        check(g.state==2 && g.score==0 && g.message.contains("体力"),"death stops later pickups and preserves the loss reason");
+        String ended=g.save(); g.confirm(); g.input(0); advance(g,1000);
+        check(g.save().equals(ended),"a finished round cannot change from input or updates");
+
+        g=new Game(Game.STACK,1,1); g.px=640; g.landTower(g.topBlock());
+        check(g.py<300,"new moving block is positioned above the tower immediately");
+        g.py=548; // Old version-2 saves may contain the previous block's landing height.
+        g=Game.restore(g.save()); check(g!=null,"old tower snapshot remains readable");
+        g.confirm(); advance(g,17);
+        check(g.state==0 && g.drops==1 && g.py<300,"rapid drop or restored drop cannot land instantly from stale height");
+        g=new Game(Game.STACK,1,1);
+        g.px=640; g.landTower(g.topBlock()); g.next=2; g.px=640; g.landTower(g.topBlock());
+        g.next=2; g.px=640; g.landTower(g.topBlock());
+        check(g.bestCombo>=g.combo && g.combo>=4,"best combo includes the final cascade");
+
+        g=empty(Game.MERGE); Game.Body root=g.add(Game.ORB,640,300,2,30,30);
+        g.add(Game.ORB,700,300,2,30,30); Game.Body obstacle=g.add(Game.ORB,670,335,8,30,30);
+        g.combineOrbs(root);
+        check(Game.distance2(root.x,root.y,obstacle.x,obstacle.y)>=Game.square(root.w+obstacle.w)-.1f,"enlarged merged ball does not overlap a different number");
+        g=empty(Game.MERGE); Game.Body back=g.add(Game.ORB,610,445,2,20,20);
+        g.add(Game.ORB,670,447,8,20,20);
+        Game.Body shot=g.add(Game.SHOT,640,491,2,28,28); shot.vy=-690; advance(g,17);
+        check(back.active && shot.number==2 && g.score==0,"projectile hits the front ball instead of merging through it by array order");
+        g=empty(Game.MERGE); g.shots=3; g.next=16; g.add(Game.ORB,640,400,16,31,31); g.confirm(); advance(g,400);
+        check(g.state==1 && g.message.contains("漂亮"),"fourth-shot pressure cannot overwrite the victory message");
+
+        g=empty(Game.DUEL); g.px=200; g.py=300;
+        Game.Body rival=g.add(Game.RIVAL,1000,300,100,30,30),eaten=g.add(Game.FOOD,990,300,3,12,12);
+        eaten.tag=1; g.add(Game.FOOD,1100,300,3,12,12); advance(g,17);
+        check(rival.x>1000,"AI targets available food, not a consumed respawning slot");
+        g=empty(Game.DUEL); g.px=1020; g.py=420; g.value=100;
+        g.add(Game.RIVAL,1020,420,20,30,30); advance(g,200);
+        rival=body(g,Game.RIVAL);
+        check(g.enemies==1 && rival!=null && Game.distance2(g.px,g.py,rival.x,rival.y)>250*250,"replacement rival cannot spawn on player and cause instant chain kills");
+        g=empty(Game.DUEL); g.px=440; g.py=370; obstacle=g.add(Game.ROCK,440,370,0,45,45); advance(g,17);
+        check(Game.distance2(g.px,g.py,obstacle.x,obstacle.y)>=Game.square(g.playerRadius()+obstacle.w),"exact-center pillar overlap resolves without a zero direction");
+        g=empty(Game.COLOR); g.px=60; g.py=400; g.add(Game.RIVAL,75,400,100,30,30); advance(g,17);
+        check(g.px>=30+g.playerRadius()-.01f,"knockback cannot leave player outside world bounds");
+        g=empty(Game.COLOR); g.hp=1;
+        g.add(Game.RIVAL,g.px,g.py,100,30,30); g.add(Game.FRIEND,g.px+75,g.py,200,22,22); advance(g,17);
+        check(g.state==2 && g.score==0 && g.message.contains("体力"),"arena death cannot collect a later ally or replace its result");
+        g=empty(Game.COLOR); g.value=g.target; g.px=2221; g.py=915; advance(g,17);
+        check(g.state==0,"being near the exit rectangle does not count as entering the circular portal");
+        g.px=Game.EXIT_X-Game.EXIT_RADIUS+1; g.py=Game.EXIT_Y; advance(g,17);
+        check(g.state==1,"entering the visible portal with enough growth wins");
+
+        g=empty(Game.PENGUIN); g.progress=450; g.px=630; g.py=600; g.phase=0; g.coyote=0; advance(g,17);
+        check(g.phase==1,"walking off the cliff consumes the ground jump after grace time");
+        g.confirm(); check(g.phase==2 && g.vy==-590,"only the air jump remains after walking off");
+        g.confirm(); check(g.phase==2 && g.vy==-590,"there is no third jump after walking off");
+        g=empty(Game.PENGUIN); g.py=Game.ground(g.px)-77; g.vy=0; g.phase=2; g.press(3,false);
+        g.add(Game.HIGH,g.px,Game.ground(g.px)-72,0,50,30); advance(g,17);
+        check(g.hp==2,"midair crouch does not grant immunity to the ice beam");
+        g=empty(Game.PENGUIN); g.press(3,false); g.add(Game.HIGH,g.px,Game.ground(g.px)-72,0,50,30); advance(g,17);
+        check(g.hp==3 && g.sliding(),"ground crouch really fits beneath the drawn beam");
+        g.releaseAll(); check(!g.sliding(),"pause releases the same crouch state used by the renderer and collisions");
+        g=empty(Game.PENGUIN); g.py=Game.ground(g.px)-110; g.phase=2;
+        g.add(Game.LOW,g.px,Game.ground(g.px)-32,100,35,60); advance(g,17);
+        check(g.hp==3,"jumping above the drawn ice block clears its actual height, including old save geometry");
+        g=empty(Game.PENGUIN); g.hp=1;
+        g.add(Game.LOW,g.px,Game.ground(g.px)-32,100,35,60); g.add(Game.FOOD,g.px+5,g.py,99,16,16); advance(g,17);
+        check(g.state==2 && g.score==0 && g.message.contains("体力"),"penguin death stops pickups in the same physics step");
+    }
+    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); savesAndBounds(); logicRegressions(); System.out.println("Arcade checks passed: "+checks); }
 }

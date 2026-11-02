@@ -9,6 +9,8 @@ public final class Game {
     public static final int MERGE=0, STACK=1, RUN=2, DUEL=3, COLOR=4, PENGUIN=5;
     public static final int ORB=1, SHOT=2, BLOCK=3, FOOD=4, WALL=5, LOW=6, HIGH=7, ADD=8, MULTIPLY=9, STAR=10, RIVAL=11, FRIEND=12, ROCK=13;
     public static final int LIMIT=99999, CAPACITY=96;
+    public static final float EXIT_X=2280, EXIT_Y=780, EXIT_RADIUS=55;
+    public static final float ICE_HEIGHT=74, ARCH_TOP=92, ARCH_HEIGHT=30;
     public static final class Body {
         public int kind, number, tag;
         public float x,y,vx,vy,w,h,age;
@@ -72,7 +74,7 @@ public final class Game {
     private void jumpAction() {
         if(mode==RUN) { if(jump<=0) { jump=.84f; roll=0; sound=2; } return; }
         buffer=.13f;
-        if(coyote>0 || phase<2) {
+        if(phase==0 && coyote>0 || phase==1) {
             vy=phase==0?-650:-590; phase++; coyote=0; buffer=0; sound=2;
             burst(px,py,0xffc4f1fc,7);
         }
@@ -103,11 +105,12 @@ public final class Game {
     }
     private void win(String s) { if(state!=0) return; state=1; message=s; sound=5; burst(px,py,0xffffcf64,24); }
     private void lose(String s) { if(state!=0) return; state=2; message=s; sound=3; }
-    private void hit(String s) {
-        if(invincible>0 || state!=0) return;
+    private boolean hit(String s) {
+        if(invincible>0 || state!=0) return false;
         hp--; invincible=1.3f; shake=7; flash=.3f; combo=0; sound=3; message=s;
         burst(px,py,0xffff7b78,12);
         if(hp<=0) lose(s+" · 体力用完了");
+        return true;
     }
     public void burst(float x,float y,int color,int count) {
         int made=0;
@@ -139,12 +142,17 @@ public final class Game {
         if(held[0]) aim=Math.max(-1.05f,aim-dt*1.2f);
         if(held[2]) aim=Math.min(1.05f,aim+dt*1.2f);
         for(Body shot:bodies) if(shot.active && shot.kind==SHOT) {
+            float startX=shot.x,startY=shot.y;
             shot.x+=shot.vx*dt; shot.y+=shot.vy*dt;
             if(shot.x<300+shot.w) { shot.x=300+shot.w; shot.vx=Math.abs(shot.vx); }
             if(shot.x>980-shot.w) { shot.x=980-shot.w; shot.vx=-Math.abs(shot.vx); }
-            Body contact=null;
-            for(Body b:bodies) if(b.active && b!=shot && b.kind==ORB && distance2(shot.x,shot.y,b.x,b.y)<square(shot.w+b.w)) { contact=b; break; }
+            Body contact=null; float first=2;
+            for(Body b:bodies) if(b.active && b!=shot && b.kind==ORB) {
+                float t=contactTime(startX,startY,shot.x-startX,shot.y-startY,b.x,b.y,shot.w+b.w);
+                if(t<first) { first=t; contact=b; }
+            }
             if(contact!=null) {
+                shot.x=startX+(shot.x-startX)*first; shot.y=startY+(shot.y-startY)*first;
                 float dx=shot.x-contact.x,dy=shot.y-contact.y, dist=(float)Math.sqrt(Math.max(1,dx*dx+dy*dy));
                 shot.x=contact.x+dx/dist*(shot.w+contact.w+1); shot.y=contact.y+dy/dist*(shot.h+contact.h+1);
                 shot.kind=ORB; shot.vx=shot.vy=0; combineOrbs(shot);
@@ -152,11 +160,38 @@ public final class Game {
             } else if(shot.y<165+shot.h) { shot.y=165+shot.h; shot.kind=ORB; shot.vx=shot.vy=0; combineOrbs(shot); finishShot(); }
         }
     }
+    private static float contactTime(float x,float y,float dx,float dy,float cx,float cy,float radius) {
+        float ox=x-cx,oy=y-cy,c=ox*ox+oy*oy-radius*radius;
+        if(c<=0) return 0;
+        float a=dx*dx+dy*dy,b=ox*dx+oy*dy,discriminant=b*b-a*c;
+        if(a==0 || discriminant<0) return 2;
+        float t=(-b-(float)Math.sqrt(discriminant))/a;
+        return t>=0 && t<=1?t:2;
+    }
+    private boolean settleOrb(Body root) {
+        for(int pass=0;pass<24;pass++) {
+            boolean moved=false;
+            for(Body b:bodies) if(b.active && b!=root && b.kind==ORB) {
+                float dx=root.x-b.x,dy=root.y-b.y,min=root.w+b.w+1;
+                if(dx*dx+dy*dy<min*min) {
+                    if(dx==0 && dy==0) dy=1;
+                    float distance=(float)Math.sqrt(dx*dx+dy*dy);
+                    root.x=b.x+dx/distance*min; root.y=b.y+dy/distance*min; moved=true;
+                }
+            }
+            float x=clamp(root.x,300+root.w,980-root.w),y=Math.max(165+root.h,root.y);
+            moved|=x!=root.x || y!=root.y; root.x=x; root.y=y;
+            if(!moved) return true;
+        }
+        for(Body b:bodies) if(b.active && b!=root && b.kind==ORB && distance2(root.x,root.y,b.x,b.y)<square(root.w+b.w)-.1f) return false;
+        return true;
+    }
     void combineOrbs(Body root) {
         combo=0;
         for(int pass=0;pass<12;pass++) {
             Body partner=null;
-            for(Body b:bodies) if(b.active && b!=root && b.kind==ORB && b.number==root.number && distance2(b.x,b.y,root.x,root.y)<square(root.w+b.w+12)) { partner=b; break; }
+            float tolerance=combo==0?1.5f:12;
+            for(Body b:bodies) if(b.active && b!=root && b.kind==ORB && b.number==root.number && distance2(b.x,b.y,root.x,root.y)<square(root.w+b.w+tolerance)) { partner=b; break; }
             if(partner==null) break;
             root.x=(root.x+partner.x)/2; root.y=(root.y+partner.y)/2; partner.active=false;
             root.number=capped((long)root.number*2); root.w=root.h=Math.min(40,28+(31-Integer.numberOfLeadingZeros(root.number))*1.3f);
@@ -164,9 +199,12 @@ public final class Game {
             event("合成 "+root.number+(combo>1?" · 连锁 ×"+combo:""),root.x,root.y,0xffffc65f,true);
         }
         bestCombo=Math.max(bestCombo,combo);
+        boolean fits=settleOrb(root);
         if(value>=target) win("漂亮！合成了 "+value+"，完成目标");
+        else if(!fits) lose("球群没有可用落点，试试换弹或反弹");
     }
     private void finishShot() {
+        if(state!=0) return;
         if(shots%4==0) { for(Body b:bodies) if(b.active && b.kind==ORB) b.y+=17; message="顶端下降了 · 尽快打开空间"; }
         for(Body b:bodies) if(b.active && b.kind==ORB && b.y+b.h>545) { lose("数字压过了警戒线"); break; }
     }
@@ -183,6 +221,7 @@ public final class Game {
     private void dropTower() {
         if(phase!=0) return;
         Body top=topBlock(); if(top==null) return;
+        py=200-Math.max(0,420-top.y);
         phase=1; vy=30; sound=2;
     }
     private void updateTower(float dt) {
@@ -221,9 +260,11 @@ public final class Game {
             add(BLOCK,px,y,next,overlap,42); value=Math.max(value,next);
             event(perfect?"完美落点！":"稳稳落下",px,y,0xff66d6cc,perfect);
         }
+        bestCombo=Math.max(bestCombo,combo);
         if(drops>=target) { win("数字塔建成！完成 "+drops+" 次精准落塔"); return; }
         int[] pattern={2,4,2,2,8,4,4,2,8,8,16,4};
         next=pattern[drops%pattern.length]; phase=0; px=vx>0?250:1030; vy=0;
+        py=200-Math.max(0,420-topBlock().y);
     }
     private void initRun() {
         target=35+level*5; goal=420; time=65; px=640; py=565; value=10;
@@ -251,7 +292,8 @@ public final class Game {
             else if(b.kind==MULTIPLY) { value=capped((long)value*2); event("×2  数字翻倍！",640,450,0xffffc65f,true); }
             else if(b.kind==STAR) { if(jumpHeight()>30) { stars++; score(50); event("空中奖励 ★",640,440,0xffffcf64,false); } }
             else if(b.kind==LOW && jumpHeight()>35 || b.kind==HIGH && roll>0) { score(15); combo++; }
-            else { hit(b.kind==LOW?"矮栏要跳过":b.kind==HIGH?"横梁要下滑":"实心路障需要换道"); value=Math.max(1,value*3/4); }
+            else if(hit(b.kind==LOW?"矮栏要跳过":b.kind==HIGH?"横梁要下滑":"实心路障需要换道")) value=Math.max(1,value*3/4);
+            if(state!=0) return;
         }
         bestCombo=Math.max(bestCombo,combo);
         if(progress>=goal) { if(value>=target) { score(value*3); win("冲线！带着 "+value+" 击破终点数字墙"); } else lose("已抵达终点，但数字还差 "+(target-value)+"；多选加法与翻倍门"); }
@@ -282,8 +324,7 @@ public final class Game {
         if(len>0) { vx=dx/len*speed; vy=dy/len*speed; } else { vx*=.72f; vy*=.72f; }
         px+=vx*dt; py+=vy*dt;
         float radius=playerRadius();
-        px=clamp(px,mode==DUEL?105:radius+30,mode==DUEL?1175:2370-radius);
-        py=clamp(py,mode==DUEL?185:150+radius,mode==DUEL?595:1430-radius);
+        confinePlayer();
         for(Body b:bodies) if(b.active) {
             if(b.kind==RIVAL) {
                 b.vy=Math.max(0,b.vy-dt);
@@ -292,7 +333,7 @@ public final class Game {
                 if(b.number<value) { tx=b.x+(b.x-px); ty=b.y+(b.y-py); }
                 else if(dist>square(mode==DUEL?500:330)) {
                     Body food=null; float best=Float.MAX_VALUE;
-                    for(Body f:bodies) if(f.active && f.kind==FOOD) { float d=distance2(f.x,f.y,b.x,b.y); if(d<best) { best=d; food=f; } }
+                    for(Body f:bodies) if(f.active && f.kind==FOOD && f.tag==0) { float d=distance2(f.x,f.y,b.x,b.y); if(d<best) { best=d; food=f; } }
                     if(food!=null) { tx=food.x; ty=food.y; }
                 }
                 float ddx=tx-b.x,ddy=ty-b.y,d=(float)Math.sqrt(ddx*ddx+ddy*ddy);
@@ -318,7 +359,9 @@ public final class Game {
             }
             if(distance2(px,py,b.x,b.y)>square(radius+b.w)) continue;
             if(b.kind==ROCK) {
-                float sx=px-b.x,sy=py-b.y,d=(float)Math.sqrt(Math.max(1,sx*sx+sy*sy)); px=b.x+sx/d*(radius+b.w+1); py=b.y+sy/d*(radius+b.h+1);
+                float sx=px-b.x,sy=py-b.y;
+                if(sx==0 && sy==0) sx=1;
+                float d=(float)Math.sqrt(sx*sx+sy*sy); px=b.x+sx/d*(radius+b.w+1); py=b.y+sy/d*(radius+b.h+1);
             } else if(b.kind==FOOD || b.kind==FRIEND) {
                 value=capped((long)value+b.number); score(b.number*3); combo++; event("+"+b.number,px,py,0xff63d6ce,false);
                 if(b.kind==FOOD) { b.tag=1; b.age=0; } else b.active=false;
@@ -328,17 +371,30 @@ public final class Game {
                 if(value>b.number) {
                     value=capped((long)value+b.number); score(b.number*5); enemies++; b.active=false;
                     event("吞噬 +"+b.number,px,py,0xffffc65f,true);
-                    if(mode==DUEL && enemies<target) add(RIVAL,1020,420,18+level*2+enemies*24,32+enemies*3,32+enemies*3);
-                } else if(invincible<=0) {
-                    hit("红方更大，先成长再回来"); value=Math.max(5,value*9/10);
-                    float sx=px-b.x,sy=py-b.y,d=(float)Math.sqrt(Math.max(1,sx*sx+sy*sy)); px+=sx/d*75; py+=sy/d*75;
+                    if(mode==DUEL && enemies<target) spawnRival();
+                } else if(hit("红方更大，先成长再回来")) {
+                    value=Math.max(5,value*9/10);
+                    float sx=px-b.x,sy=py-b.y;
+                    if(sx==0 && sy==0) sx=1;
+                    float d=(float)Math.sqrt(sx*sx+sy*sy); px+=sx/d*75; py+=sy/d*75;
                 }
             }
+            if(state!=0) return;
         }
+        confinePlayer();
         for(Body b:bodies) if(b.active && (b.kind==ADD || b.kind==MULTIPLY) && b.tag==1 && b.age>7) { b.tag=0; b.age=0; }
         if(mode==DUEL && enemies>=target) win("竞技场冠军！连续击败三名对手");
-        if(mode==COLOR && value>=target && px>2220 && Math.abs(py-780)<140) { score(value*2); win("成功撤离！红蓝数字之旅完成"); }
+        if(mode==COLOR && value>=target && distance2(px,py,EXIT_X,EXIT_Y)<=square(EXIT_RADIUS)) { score(value*2); win("成功撤离！红蓝数字之旅完成"); }
         bestCombo=Math.max(bestCombo,combo);
+    }
+    private void spawnRival() {
+        float x=px<640?1050:230,y=py<390?550:230;
+        add(RIVAL,x,y,18+level*2+enemies*24,32+enemies*3,32+enemies*3);
+    }
+    private void confinePlayer() {
+        float radius=playerRadius();
+        px=clamp(px,mode==DUEL?105:radius+30,mode==DUEL?1175:2370-radius);
+        py=clamp(py,mode==DUEL?185:150+radius,mode==DUEL?595:1430-radius);
     }
     private void placeFood(Body food) {
         for(int attempt=0;attempt<8;attempt++) {
@@ -350,12 +406,15 @@ public final class Game {
         food.x=200; food.y=230;
     }
     private void separate(Body a,Body rock,float radius) {
-        float dx=a.x-rock.x,dy=a.y-rock.y,d=(float)Math.sqrt(Math.max(1,dx*dx+dy*dy));
+        float dx=a.x-rock.x,dy=a.y-rock.y;
+        if(dx==0 && dy==0) dx=1;
+        float d=(float)Math.sqrt(dx*dx+dy*dy);
         if(d<radius+rock.w) { a.x=rock.x+dx/d*(radius+rock.w+1); a.y=rock.y+dy/d*(radius+rock.h+1); }
     }
     public float playerRadius() { return Math.min(mode==DUEL?42:64,22+(float)Math.sqrt(value)*2.2f); }
+    public boolean sliding() { return mode==RUN?roll>0:mode==PENGUIN && held[3]; }
     private void initPenguin() {
-        goal=5400; target=28+Math.min(72,level*2); time=65; px=180; py=ground(px)-33; value=5;
+        goal=5400; target=28+Math.min(72,level*2); time=65; px=180; py=ground(px)-33; value=5; coyote=.1f;
         for(int chunk=0;chunk<4;chunk++) {
             float start=chunk*1300;
             for(int j=0;j<9;j++) {
@@ -376,6 +435,7 @@ public final class Game {
     }
     private void updatePenguin(float dt) {
         buffer=Math.max(0,buffer-dt); coyote=Math.max(0,coyote-dt);
+        if(phase==0 && coyote<=0) phase=1;
         float speed=held[0]?150:held[2]?300:225+Math.min(25,level);
         progress+=speed*dt; px=180+progress;
         boolean gap=gapEnd(px)>=0;
@@ -387,17 +447,24 @@ public final class Game {
         }
         if(py>770) {
             hit("冰缝要提前跳起，空中还能再跳一次");
+            if(state!=0) return;
             float end=gapEnd(px);
             if(end>0) { px=end+45; progress=px-180; }
             py=ground(px)-33; vy=0; phase=0; coyote=.1f;
         }
-        for(Body b:bodies) if(b.active && Math.abs(px-b.x)<34+b.w && Math.abs(py-b.y)<35+b.h) {
+        for(Body b:bodies) if(b.active) {
+            // Derive ice bounds from the drawn silhouette, including bodies in older version-2 saves.
+            float center=b.kind==LOW?ground(b.x)-ICE_HEIGHT/2:b.kind==HIGH?ground(b.x)-ARCH_TOP+ARCH_HEIGHT/2:b.y;
+            float height=b.kind==LOW?ICE_HEIGHT/2:b.kind==HIGH?ARCH_HEIGHT/2:b.h;
+            float playerY=py+(sliding()?17:0),playerHeight=sliding()?16:33;
+            if(Math.abs(px-b.x)>=34+b.w || Math.abs(playerY-center)>=playerHeight+height) continue;
             if(b.kind==FOOD) { value=capped((long)value+b.number); score(b.number*5); combo++; event("+"+b.number,px,py,0xff6fe0d6,false); b.active=false; }
             else if(b.kind==STAR) { stars++; skin=stars/5%3; score(100); event("★  空中宝藏",px,py,0xffffd271,true); b.active=false; }
             else if(b.kind==LOW) {
                 if(value>b.number) { value=capped((long)value+b.number); score(50); event("冲破冰块 +"+b.number,px,py,0xffb1f1fc,true); b.active=false; }
-                else { hit("冰块更大，跳跃绕过"); b.active=false; vy=-300; }
-            } else if(b.kind==HIGH && !held[3]) { hit("冰拱下要按住下键滑行"); b.active=false; }
+                else if(hit("冰块更大，跳跃绕过")) { b.active=false; vy=-300; }
+            } else if(b.kind==HIGH && hit("冰拱下要按住下键滑行")) b.active=false;
+            if(state!=0) return;
         }
         bestCombo=Math.max(bestCombo,combo);
         if(progress>=goal) {

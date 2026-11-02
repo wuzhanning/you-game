@@ -57,7 +57,7 @@ final class GameView extends View {
         if(ready || game.state!=0) { invalidate(); return; }
         if(!running) { running=true; previous=0; Choreographer.getInstance().postFrameCallback(frame); }
     }
-    void stop() { running=false; Choreographer.getInstance().removeFrameCallback(frame); game.releaseAll(); heldDown=false; }
+    void stop() { running=false; Choreographer.getInstance().removeFrameCallback(frame); game.releaseAll(); }
     @Override protected void onDetachedFromWindow() { stop(); super.onDetachedFromWindow(); }
     private void refresh() {
         boolean changed=oldValue!=game.value || oldScore!=game.score || oldTime!=(int)game.time;
@@ -275,10 +275,10 @@ final class GameView extends View {
                 if(x<40 || x>1240 || y<125 || y>635) continue;
                 oval(c,x,y,20,8,0xffb8cf9d); line(c,x-3,y,x-5,y-8,0xffa4be8b,2); line(c,x+2,y,x+4,y-6,0xffa4be8b,2);
             }
-            float gx=2280-cx,gy=780-cy; boolean unlocked=game.value>=game.target;
+            float gx=Game.EXIT_X-cx,gy=Game.EXIT_Y-cy; boolean unlocked=game.value>=game.target;
             if(gx<1270 && gy<700 && gy>80) {
                 circle(c,gx,gy,75,unlocked?0xffa1d3b8:0xffc7cca7);
-                p.setColor(unlocked?TEAL:0xff969c88); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(8); c.drawCircle(gx,gy,55,p); p.setStyle(Paint.Style.FILL);
+                p.setColor(unlocked?TEAL:0xff969c88); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(8); c.drawCircle(gx,gy,Game.EXIT_RADIUS,p); p.setStyle(Paint.Style.FILL);
                 text(c,unlocked?"出口":"成长后开启",gx,gy+7,20,INK,true);
             }
         }
@@ -323,7 +323,7 @@ final class GameView extends View {
     private void penguin(Canvas c,float x,float y,float r,boolean sliding) {
         c.save(); c.translate(x,y);
         if(game.phase==2) c.rotate(Game.clamp((game.vy+590)/1240,0,1)*360);
-        if(sliding) c.rotate(-70);
+        if(sliding) { c.scale(1,.55f); c.rotate(-70); }
         int coat=game.skin==0?0xff26435a:game.skin==1?0xff765c99:0xff497b74;
         oval(c,0,3,r*1.65f,r*2.3f,coat); oval(c,0,r*.18f,r*1.15f,r*1.7f,WHITE);
         float flap=(float)Math.sin(game.elapsed*12)*10;
@@ -367,13 +367,13 @@ final class GameView extends View {
             else if(b.kind==Game.STAR) { circle(c,x,y,26+(float)Math.sin(game.elapsed*5)*3,0x44fff0c0); star(c,x,y,18,GOLD); }
             else if(b.kind==Game.LOW) {
                 float floor=Game.ground(b.x);
-                quad(c,0xff8bd3e2,x-34,floor,x-26,floor-56,x+15,floor-74,x+38,floor);
-                quad(c,0xffb9f0f1,x-26,floor-56,x+15,floor-74,x+12,floor,x-5,floor);
+                quad(c,0xff8bd3e2,x-34,floor,x-26,floor-56,x+15,floor-Game.ICE_HEIGHT,x+38,floor);
+                quad(c,0xffb9f0f1,x-26,floor-56,x+15,floor-Game.ICE_HEIGHT,x+12,floor,x-5,floor);
                 text(c,bodyLabels[i],x+2,floor-25,25,INK,true);
             } else if(b.kind==Game.HIGH) {
                 float floor=Game.ground(b.x);
-                rect(c,x-50,floor-92,18,92,0xffa1e2e6,4); rect(c,x+32,floor-92,18,92,0xffa1e2e6,4);
-                rect(c,x-50,floor-92,100,30,0xffc0f1ef,8); text(c,"↓",x,floor-69,24,INK,true);
+                rect(c,x-50,floor-Game.ARCH_TOP,18,Game.ARCH_TOP,0xffa1e2e6,4); rect(c,x+32,floor-Game.ARCH_TOP,18,Game.ARCH_TOP,0xffa1e2e6,4);
+                rect(c,x-50,floor-Game.ARCH_TOP,100,Game.ARCH_HEIGHT,0xffc0f1ef,8); text(c,"↓",x,floor-69,24,INK,true);
             }
         }
         if(game.goal-game.progress<900) {
@@ -384,10 +384,9 @@ final class GameView extends View {
         }
         float radius=Math.min(35,25+(float)Math.sqrt(game.value)*.5f);
         oval(c,260,Game.ground(game.px)+4,72,12,0x22416982);
-        if(game.invincible==0 || ((int)(game.elapsed*10))%2==0) penguin(c,260,game.py,radius,heldDown);
+        if(game.invincible==0 || ((int)(game.elapsed*10))%2==0) penguin(c,260,game.py+(game.sliding()?17:0),radius,game.sliding());
         rect(c,222,game.py-radius-60,76,31,INK,12); text(c,number,260,game.py-radius-36,23,WHITE,true);
     }
-    private boolean heldDown;
     private void effects(Canvas c) {
         float cx=cameraX(),cy=cameraY();
         float towerCamera=0;
@@ -409,7 +408,7 @@ final class GameView extends View {
             case KeyEvent.KEYCODE_DPAD_LEFT: direction(0,event.getRepeatCount()>0); return true;
             case KeyEvent.KEYCODE_DPAD_UP: direction(1,event.getRepeatCount()>0); return true;
             case KeyEvent.KEYCODE_DPAD_RIGHT: direction(2,event.getRepeatCount()>0); return true;
-            case KeyEvent.KEYCODE_DPAD_DOWN: heldDown=true; direction(3,event.getRepeatCount()>0); return true;
+            case KeyEvent.KEYCODE_DPAD_DOWN: direction(3,event.getRepeatCount()>0); return true;
             case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER: case KeyEvent.KEYCODE_BUTTON_A: if(event.getRepeatCount()==0) confirm(); return true;
             case KeyEvent.KEYCODE_BACK: case KeyEvent.KEYCODE_MENU: case KeyEvent.KEYCODE_BUTTON_START: case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE: if(event.getRepeatCount()==0) host.pauseMenu(); return true;
             default: return super.onKeyDown(code,event);
@@ -417,7 +416,7 @@ final class GameView extends View {
     }
     @Override public boolean onKeyUp(int code,KeyEvent event) {
         int d=code==KeyEvent.KEYCODE_DPAD_LEFT?0:code==KeyEvent.KEYCODE_DPAD_UP?1:code==KeyEvent.KEYCODE_DPAD_RIGHT?2:code==KeyEvent.KEYCODE_DPAD_DOWN?3:-1;
-        if(d>=0) { game.release(d); if(d==3) heldDown=false; return true; }
+        if(d>=0) { game.release(d); return true; }
         return super.onKeyUp(code,event);
     }
     @Override public boolean onTouchEvent(MotionEvent e) {
