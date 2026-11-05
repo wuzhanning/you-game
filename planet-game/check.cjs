@@ -46,7 +46,7 @@ const storage=new Map(),ui={};
 const savedState={bombs:2,bombMode:false,score:60,best:90,balls:[makePlanet(2,160,400)],level:1,nextLevel:0,aim:160,cooldown:12,overTicks:0,ended:false,paused:false,discovered:new Set([0,1,2]),PLANETS,WIDTH,
   localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)||null},
   $:id=>ui[id]??=( {textContent:'',style:{}} ),setOverlay:()=>{}};
-savedState.shakeGiftClaimed=false;savedState.bombGiftClaimed=false;savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
+savedState.bombRefill20261105=false;savedState.shakeGiftClaimed=false;savedState.bombGiftClaimed=false;savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
 savedState.baseMode=baseMode;savedState.bodyBounds=bodyBounds;
 vm.createContext(savedState);
 vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),savedState);
@@ -79,7 +79,7 @@ for(const [from,to] of [[8,9],[9,10]]){
 const bombUI={};let bombSaves=0;
 const bombState={bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
-bombState.shakeGiftClaimed=false;bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
+bombState.bombRefill20261105=false;bombState.shakeGiftClaimed=false;bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
 bombState.baseMode=baseMode;bombState.bodyBounds=bodyBounds;
 vm.createContext(bombState);
 vm.runInContext(source.slice(source.indexOf('function merged('),source.indexOf('// Render each planet once;')),bombState);
@@ -138,7 +138,7 @@ bombState.paused=true;assert.equal(bombState.useShake(),false);bombState.paused=
 for(let i=0;i<5;i++)bombState.merged(makePlanet(1,120,400));assert.equal(bombState.shakes,3);assert.equal(bombState.mergeCount,0);
 const modeStorage=new Map();bombState.localStorage={getItem:k=>modeStorage.get(k)||null,setItem:(k,v)=>modeStorage.set(k,v)};bombState.planetSprites=new Map();bombState.lastDrawKey='';bombState.buildCollection=()=>{};bombState.wakeFrames=()=>{};
 vm.runInContext(source.slice(source.indexOf('function saveGame('),source.indexOf('function merged(')),bombState);
-bombState.score=100;bombState.best=150;bombState.bombs=2;bombState.shakes=4;
+bombState.bombRefill20261105=true;bombState.score=100;bombState.best=150;bombState.bombs=2;bombState.shakes=4;
 assert(bombState.switchMode('number'));assert.equal(bombState.score,0);assert.equal(bombState.best,0);assert.equal(bombState.shakes,3);assert.equal(bombState.balls.length,0);
 assert(bombState.drop());assert.equal(bombState.balls[0].level,0);assert.equal(bombState.level,0);assert([0,1,2].includes(bombState.nextLevel));
 bombState.score=200;bombState.best=220;bombState.shakes=1;bombState.balls=[makePlanet(12,200,400)];
@@ -274,3 +274,27 @@ tv.window.tvInput('menu');tv.window.tvInput('right');tv.window.tvInput('ok');ass
 tv.window.tvInput('back');assert.equal(tvDialog,null);assert(tv.window.tvInput('back'));assert(tv.paused);assert.equal(tv.window.tvInput('back'),false);
 tv.window.tvInput('ok');assert(!tv.paused);assert.equal(tvDrops,1);
 console.log('PASS: TV remote movement, drop, items, modal focus, pause, resume and exit');
+
+// Refill existing saves once, including previously claimed gifts and finished rounds.
+for(const selectedMode of ['planet','number','letter','number-glyph','letter-glyph']){
+  const result=JSON.parse(vm.runInContext(`JSON.stringify((()=>{
+    switchMode('${selectedMode}');bombRefill20261105=false;bombGiftClaimed=true;
+    bombs=7;score=123;best=456;ended=true;saveGame();
+    const before=JSON.parse(localStorage.getItem(mode+'-save'));
+    const applied=refillBombs(),after=JSON.parse(localStorage.getItem(mode+'-save'));
+    bombs=99;saveGame();restoreGame();const duplicate=refillBombs();
+    return {before,after,applied,duplicate,bombs};
+  })())`,app));
+  assert(result.applied);assert.equal(result.after.bombs,100);assert.equal(result.bombs,99);assert(!result.duplicate);
+  delete result.before.bombs;delete result.before.bombRefill20261105;
+  delete result.after.bombs;delete result.after.bombRefill20261105;
+  assert.deepEqual(result.after,result.before,'refill preserves all other progress in '+selectedMode);
+}
+const failedRefill=vm.runInContext(`(()=>{
+  bombRefill20261105=false;bombs=8;saveGame();
+  const write=localStorage.setItem;localStorage.setItem=()=>{throw new Error('quota');};
+  const applied=refillBombs();localStorage.setItem=write;
+  return !applied&&bombs===8&&!bombRefill20261105;
+})()`,app);
+assert(failedRefill,'failed storage write must not change live items or mark refill claimed');
+console.log('PASS: all five saves refill to exactly 100 once, preserving progress and handling failed writes');

@@ -15,7 +15,7 @@ function paintGlyph(c,l,x,y,r,selectedMode,color){
   const label=bodySpec(l,selectedMode).name;c.fillStyle=color;c.textAlign='center';c.textBaseline='middle';
   c.font='900 '+Math.min(r*1.85,r*1.8/label.length)+'px sans-serif';c.fillText(label,x,y+r*.06);
 }
-let bombGiftClaimed=false,shakeGiftClaimed=false;
+let bombGiftClaimed=false,shakeGiftClaimed=false,bombRefill20261105=false;
 let bombs=0,bombMode=false,bombTarget=0,pendingDrop=null;
 let balls=[],score=0,best=0,level=0,nextLevel=0,aim=240,paused=false,ended=false,cooldown=0,overTicks=0,sound=true,audioContext,particles=[],discovered=new Set([0]);
 try{const n=Number(localStorage.getItem(mode+'-best'));best=Number.isSafeInteger(n)&&n>=0?n:0;sound=localStorage.getItem('planet-sound')!=='off';}catch(error){}
@@ -94,7 +94,7 @@ function beep(kind,l=0){
   });}catch(error){}
 }
 function saveGame(){
-  try{localStorage.setItem(mode+'-save',JSON.stringify({version:1,bombGiftClaimed,shakeGiftClaimed,shakes,mergeCount,shakeTicks,bombs,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
+  try{localStorage.setItem(mode+'-save',JSON.stringify({version:1,bombGiftClaimed,shakeGiftClaimed,bombRefill20261105,shakes,mergeCount,shakeTicks,bombs,score,best,balls,level,nextLevel,aim,cooldown,overTicks,ended,discovered:[...discovered]}));
     localStorage.setItem(mode+'-best',String(best));return true;
   }catch(error){$('save-status').textContent='浏览器存储不可用，本次进度无法保存';return false;}
 }
@@ -106,6 +106,7 @@ function restoreGame(){
     const count=n=>Number.isSafeInteger(n)&&n>=0;
     if((saved.shakes!==undefined&&!count(saved.shakes))||(saved.mergeCount!==undefined&&(!count(saved.mergeCount)||saved.mergeCount>4))||(saved.shakeTicks!==undefined&&(!count(saved.shakeTicks)||saved.shakeTicks>48))||(saved.bombs!==undefined&&!count(saved.bombs))||saved.version!==1||!count(saved.score)||!count(saved.best)||!validLevel(saved.level)||!validLevel(saved.nextLevel)||!Number.isFinite(saved.aim)||saved.aim<0||saved.aim>WIDTH||!count(saved.cooldown)||saved.cooldown>42||!count(saved.overTicks)||saved.overTicks>151||typeof saved.ended!=='boolean'||!Array.isArray(saved.discovered)||!saved.discovered.every(validLevel)||!Array.isArray(saved.balls)||saved.balls.length>500||!saved.balls.every(b=>b&&validLevel(b.level)&&['x','y','vx','vy'].every(k=>Number.isFinite(b[k])&&Math.abs(b[k])<10000)&&count(b.age)))throw new Error('Invalid save');
     shakes=saved.shakes===undefined?3:saved.shakes;mergeCount=saved.mergeCount===undefined?0:saved.mergeCount;shakeTicks=saved.shakeTicks===undefined?0:saved.shakeTicks;
+    bombRefill20261105=saved.bombRefill20261105===true;
     bombs=saved.bombs===undefined?0:saved.bombs;bombMode=false;bombGiftClaimed=saved.bombGiftClaimed===true;shakeGiftClaimed=saved.shakeGiftClaimed===true;
     ({score,balls,level,nextLevel,aim,cooldown,overTicks,ended}=saved);best=Math.max(best,saved.best,score);discovered=new Set(saved.discovered);paused=!ended;
     $('hint').style.opacity=balls.length?0:1;$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';
@@ -124,6 +125,16 @@ function grantBombGift(){
     try{localStorage.setItem('bomb-gift-20261006','claimed');}catch(error){}
     $('overlay-copy').textContent='已补给 100 颗炸弹，当前分数和棋盘全部保留。';
     return true;
+  }catch(error){$('save-status').textContent='炸弹补给未保存，请检查浏览器存储后重试';return false;}
+}
+function refillBombs(){
+  if(bombRefill20261105)return false;
+  try{
+    const saved=JSON.parse(localStorage.getItem(mode+'-save'));
+    if(!saved||saved.bombRefill20261105)return false;
+    // Commit only the supply and receipt; preserve every other saved field.
+    localStorage.setItem(mode+'-save',JSON.stringify({...saved,bombs:100,bombRefill20261105:true}));
+    bombs=100;bombRefill20261105=true;updateBomb();return true;
   }catch(error){$('save-status').textContent='炸弹补给未保存，请检查浏览器存储后重试';return false;}
 }
 function grantShakeGift(){
@@ -166,9 +177,9 @@ function switchMode(next){
   if(!['planet','number','letter','number-glyph','letter-glyph'].includes(next))return false;
   if(next===mode)return true;
   if(!saveGame())return false;
-  mode=next;best=0;bombGiftClaimed=false;shakeGiftClaimed=false;
+  mode=next;best=0;bombGiftClaimed=false;shakeGiftClaimed=false;bombRefill20261105=false;
   try{const n=Number(localStorage.getItem(mode+'-best'));if(Number.isSafeInteger(n)&&n>=0)best=n;localStorage.setItem('game-mode',mode);}catch(error){}
-  planetSprites.clear();lastDrawKey='';reset(false);restoreGame();buildCollection();update();return true;
+  planetSprites.clear();lastDrawKey='';reset(false);if(restoreGame())refillBombs();buildCollection();update();return true;
 }
 function useShake(){
   if(shakes<1||shakeTicks>0||bombMode||paused||ended||balls.length===0||document.querySelector('dialog[open]'))return false;
@@ -347,4 +358,4 @@ window.addEventListener('pageshow',wakeFrames);
 setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext&&audioContext.suspend().catch(()=>{});}else wakeFrames();});
 if(document.modelContext&&document.modelContext.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch(error){}}
-if(restoreGame()){grantBombGift();grantShakeGift();}buildCollection();soundButton();update();wakeFrames();
+if(restoreGame()){grantBombGift();grantShakeGift();refillBombs();}buildCollection();soundButton();update();wakeFrames();
