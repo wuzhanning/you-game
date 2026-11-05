@@ -154,7 +154,7 @@ function grantShakeGift(){
 function merged(b){const earned=Math.min(Number.MAX_SAFE_INTEGER,2**Math.min(b.level,50)*5);score=Math.min(Number.MAX_SAFE_INTEGER,score+earned);discovered.add(b.level);if(score>best)best=score;
   $('status').textContent='✦ 好棒！合成了'+kind(b.level).name+'，收获 '+earned+' 颗星光';
   mergeCount++;if(mergeCount===5){mergeCount=0;shakes++;$('status').textContent+=' · 摇一摇 +1';}
-  if(b.level===7){bombs++;$('status').textContent+=' · 获得 1 颗炸弹！';}
+  if(b.level===(baseMode(mode)==='letter'?3:7)){bombs++;$('status').textContent+=' · 获得 1 颗炸弹！';}
   for(let i=0;i<12;i++){const a=i*Math.PI/6;particles.push({x:b.x,y:b.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:36,color:kind(b.level).shade});}beep('merge',b.level);update();saveGame();
 }
 function requestDrop(x=aim){

@@ -105,6 +105,16 @@ state.navigator.getGamepads=()=>[pad];pad.mapping='standard';pad.buttons.forEach
 state.toggleBomb=()=>{state.bombMode=!state.bombMode;};state.selectBombTarget=()=>{};state.bombTarget=0;state.removePlanet=()=>{bombActions++;state.bombMode=false;};
 poll();button(1,true);assert(state.bombMode);button(1,false);button(0,true);poll();assert.equal(bombActions,1);button(0,false);
 console.log('PASS: advanced merges, Jupiter rewards, exact-target removal, cancellation, gamepad confirmation, bomb persistence and old saves');
+for(const letterMode of ['letter','letter-glyph']){
+  bombState.mode=letterMode;bombState.bombs=100;
+  bombState.merged(makePlanet(3,120,400));bombState.merged(makePlanet(3,160,400));
+  assert.equal(bombState.bombs,102,'each D earns exactly one bomb in '+letterMode);
+  for(const level of [0,1,2,4,7,25])bombState.merged(makePlanet(level,120,400));
+  assert.equal(bombState.bombs,102,'other letters no longer earn bombs');
+}
+bombState.mode='planet';
+console.log('PASS: repeated D rewards in both letter modes; other letters give no bombs');
+
 
 let renders=0,physicsSteps=0,rafCalls=0,polls=0;
 const scheduler={pendingDrop:null,flushDrop(){},padKey:null,document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
