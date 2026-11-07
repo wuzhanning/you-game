@@ -231,6 +231,19 @@ public final class GameCheck {
         g.add(Game.FOOD,1,0,-1,1,1); advance(g,40);
         check(g.state==2 && g.value==0,"a red number can end a run before the reward track");
 
+        Game first=new Game(Game.NUMBER_SHOOTER,1,12345);
+        Game second=new Game(Game.NUMBER_SHOOTER,2,12345);
+        check(first.value==1 && second.value==2 && second.target>first.target,"the next level raises the start and vault");
+        check(body(second,Game.FOOD).number>body(first,Game.FOOD).number &&
+            body(second,Game.BLOCK).number>body(first,Game.BLOCK).number,"the opening pickup and reward wall scale with the start");
+        check(second.bodies[3].number<first.bodies[3].number,"red penalties scale with the start");
+        Game carried=new Game(Game.NUMBER_SHOOTER,2,12345,223);
+        check(carried.value==223 && Game.restore(carried.save()).value==223,"the next level opens with the carried number and saves it");
+        check(carried.target==second.target && body(carried,Game.FOOD).number==body(second,Game.FOOD).number,
+            "bringing a larger number gives an advantage instead of scaling the track against it");
+        second.target=7777; second.value=123;
+        check(Game.restore(second.save()).value==123,"legacy levels with fixed vault targets still restore");
+
         for(int level:new int[]{1,30,60}){
             g=new Game(Game.NUMBER_SHOOTER,level,12345);
             for(int tick=0;tick<2100 && g.state==0;tick++){

@@ -12,6 +12,7 @@ public final class Game {
     public static final float EXIT_X=2280, EXIT_Y=780, EXIT_RADIUS=55;
     public static final float ICE_HEIGHT=74, ARCH_TOP=92, ARCH_HEIGHT=30;
     static final int SHOOTER_FINISH=370;
+    static final int SHOOTER_MAX_START_BONUS=19;
     private static final int[] REWARD_WALLS={2,4,8,15,25,40,63,90,125,175,240,350,500,750,1000,1564,2400};
     public static final class Body {
         public int kind, number, tag;
@@ -30,13 +31,16 @@ public final class Game {
     public long seed;
     private float tapX,tapY,tapTime,stepRemainder;
     public Game(int mode,int level,long seed) {
+        this(mode,level,seed,level);
+    }
+    Game(int mode,int level,long seed,int shooterStartingValue) {
         if(mode<0 || mode>NUMBER_SHOOTER || level<1 || level>60) throw new IllegalArgumentException("Invalid game");
         this.mode=mode; this.level=level; this.seed=seed;
         for(int i=0;i<CAPACITY;i++) bodies[i]=new Body();
         if(mode==MERGE) initBlaster();
         else if(mode==STACK) initTower();
         else if(mode==RUN) initRun();
-        else if(mode==NUMBER_SHOOTER) initNumberShooter();
+        else if(mode==NUMBER_SHOOTER) initNumberShooter(shooterStartingValue);
         else if(mode==DUEL || mode==COLOR) initArena();
         else initPenguin();
     }
@@ -283,25 +287,25 @@ public final class Game {
         }
         message="三条跑道 · 收集数字，选择更好的运算门";
     }
-    private void initNumberShooter() {
-        value=1; next=4; reserve=44; time=60;
-        goal=535; target=7777;
-        add(FOOD,1,24,1,1,1);
+    private void initNumberShooter(int startingNumber) {
+        value=Math.max(level,capped(startingNumber)); next=4; reserve=44; time=60;
+        goal=535; target=7777+(level-1)*1000;
+        add(FOOD,1,24,level,1,1);
         add(ADD,1,47,1,1,1);
         for(int section=0;section<5;section++){
             int z=68+section*56, good=(section+level)%3, alternate=(good+1)%3;
-            int growth=2+section+level/4;
+            int growth=(2+section)*level;
             add(FOOD,good,z,growth,1,1);
             add(FOOD,alternate,z,-growth,1,1);
             add(section%2==0?STAR:ADD,good,z+17,section%2==0?4:1,1,1);
-            add(FOOD,alternate,z+17,growth+2,1,1);
+            add(FOOD,alternate,z+17,growth+2*level,1,1);
             add(LOW,(good+2)%3,z+32,0,1,1);
             add(FOOD,good,z+32,growth*2,1,1);
             if(section==2 || section==4) add(MULTIPLY,alternate,z+48,2,1,1);
         }
-        int difficulty=1+(level-1)/8;
         for(int i=0;i<REWARD_WALLS.length;i++){
-            int strength=REWARD_WALLS[i]*difficulty;
+            int base=REWARD_WALLS[i];
+            int strength=base+(level-1)*Math.max(1,base/3);
             add(BLOCK,1,380+i*8,strength,2,Math.min(200,8+i*3));
         }
         add(BLOCK,1,goal,target,2,200);
@@ -604,7 +608,8 @@ public final class Game {
             g.score=in.readInt(); g.value=in.readInt(); g.hp=in.readInt(); g.state=in.readInt(); g.target=in.readInt(); g.goal=in.readInt();
             g.next=in.readInt(); g.reserve=in.readInt(); g.shots=in.readInt(); g.drops=in.readInt(); g.combo=in.readInt(); g.bestCombo=in.readInt(); g.stars=in.readInt(); g.skin=in.readInt(); g.enemies=in.readInt(); g.phase=in.readInt();
             g.elapsed=in.readFloat(); g.progress=in.readFloat(); g.px=in.readFloat(); g.py=in.readFloat(); g.vx=in.readFloat(); g.vy=in.readFloat(); g.aim=in.readFloat(); g.lane=in.readFloat(); g.laneTarget=in.readFloat(); g.jump=in.readFloat(); g.roll=in.readFloat(); g.cooldown=in.readFloat(); g.invincible=in.readFloat(); g.time=in.readFloat(); g.spawn=in.readFloat(); g.buffer=in.readFloat(); g.coyote=in.readFloat(); g.boost=in.readFloat(); g.stepRemainder=in.readFloat();
-            if(g.score<0 || g.score>LIMIT || g.value<0 || g.value>LIMIT || g.hp<0 || g.hp>3 || g.state<0 || g.state>2 || g.target!=expectedTarget || g.goal!=expectedGoal || g.next<1 || g.next>LIMIT || g.reserve<1 || g.reserve>LIMIT || g.skin<0 || g.skin>2 || g.phase<0 || g.phase>2 || g.stars<0 || g.stars>100000 || g.enemies<0 || g.enemies>20 || g.shots<0 || g.shots>1000 || g.drops<0 || g.drops>50 || g.combo<0 || g.combo>10000 || g.bestCombo<0 || g.bestCombo>10000) return null;
+            boolean validTarget=g.target==expectedTarget || (g.mode==NUMBER_SHOOTER && g.target==7777);
+            if(g.score<0 || g.score>LIMIT || g.value<0 || g.value>LIMIT || g.hp<0 || g.hp>3 || g.state<0 || g.state>2 || !validTarget || g.goal!=expectedGoal || g.next<1 || g.next>LIMIT || g.reserve<1 || g.reserve>LIMIT || g.skin<0 || g.skin>2 || g.phase<0 || g.phase>2 || g.stars<0 || g.stars>100000 || g.enemies<0 || g.enemies>20 || g.shots<0 || g.shots>1000 || g.drops<0 || g.drops>50 || g.combo<0 || g.combo>10000 || g.bestCombo<0 || g.bestCombo>10000) return null;
             for(float f:new float[]{g.elapsed,g.progress,g.px,g.py,g.vx,g.vy,g.aim,g.lane,g.laneTarget,g.jump,g.roll,g.cooldown,g.invincible,g.time,g.spawn,g.buffer,g.coyote,g.boost,g.stepRemainder}) if(!Float.isFinite(f) || Math.abs(f)>20000) return null;
             if(g.elapsed<0 || g.elapsed>120 || g.time<0 || g.time>100 || Math.abs(g.aim)>1.06 || g.lane<0 || g.lane>2 || g.laneTarget<0 || g.laneTarget>2 || g.stepRemainder<0 || g.stepRemainder>.11f) return null;
             for(Body b:g.bodies) {

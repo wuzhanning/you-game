@@ -30,7 +30,7 @@ public final class NativeActivity extends Activity {
         "方向键连续移动，确认可短距离加速，冲刺冷却 2.4 秒。\n\n收集 +3 小数字，抢占 +8 和 ×2 运算环。运算环使用后冷却 7 秒。红方大于你时会追击，变得比你小时会逃跑；数字更大时碰到对手即可击败它并吸收数字。\n\n石柱会挡住双方，利用地形绕行。被更大对手撞到损失体力和部分数字。80 秒内连续击败 3 名对手获胜。",
         "方向键在连续世界中自由移动，确认短暂冲刺。黄色数字提供成长，蓝色同伴可以直接吸收；红色对手只有数字小于你时才可吞噬。\n\n更大的红方会追赶你，小红方会逃跑。先在安全处收集数字，再选择可追上的猎物。被大红方碰到会损失体力和部分数字。\n\n达到目标数字后，去地图东侧的圆形传送门撤离。右下角小地图标出你和出口的位置。100 秒内完成任务。",
         "企鹅在起伏冰坡上自动滑行，确认或上键跳跃，空中再按一次可二段跳。左键刹车、右键加速；下键快速下落，按住下键可低身穿过冰拱。\n\n冰缝需要提前跳起，空中鱼群与星星奖励准确的起跳时机。比你小的冰块可以撞碎吸收，大冰块需要跳过。摔入冰缝或撞上危险损失体力。\n\n带够小鱼到达营地过关。星星跨关保存，每 5 颗换一种企鹅配色。",
-        "确认出发后，数字会自动前进和射击。左右键换道。蓝色数字被击中会变大，碰到就加进自己的数字，数字越大，子弹威力越强。避开红色减法数字和尖刺。\n\n绿色射速门和射程门会因射击而增强，通过门可领取加成。蓝色 ×2 门让当前数字翻倍。\n\n冲过黑白线即过关。之后逐个打破黄色数字墙赚金币，争取打开 7777 金库。大厅的「强化 / 选关」可用金币提升下次开局的数字和射速。"
+        "确认出发后，数字会自动前进和射击。左右键换道。蓝色数字被击中会变大，碰到就加进自己的数字，数字越大，子弹威力越强。避开红色减法数字和尖刺。\n\n绿色射速门和射程门会因射击而增强，通过门可领取加成。蓝色 ×2 门让当前数字翻倍。\n\n冲过黑白线即过关。之后打破黄色数字墙赚金币，挑战终点金库。结算时手里的数字会带入下一关，开局至少等于关卡数加保底强化。赛道数字随关卡提高。"
     };
     private android.media.SoundPool audio;
     private final int[] sounds=new int[6];
@@ -59,7 +59,7 @@ public final class NativeActivity extends Activity {
         if(saved!=null && saved.getInt("mode",-1)>=0) {
             int mode=saved.getInt("mode");
             if(mode<TITLES.length) {
-                Game restored=Game.restore(prefs.getString("save-"+mode,null));
+                Game restored=restoreSaved(mode);
                 if(restored!=null) { view=new GameView(this,restored); setContentView(view); view.requestFocus(); }
             }
         }
@@ -139,7 +139,7 @@ public final class NativeActivity extends Activity {
     }
     private void choose(int mode) {
         selected=mode; prefs.edit().putInt("selected",mode).apply();
-        Game saved=Game.restore(prefs.getString("save-"+mode,null));
+        Game saved=restoreSaved(mode);
         String description=SUBTITLES[mode]+"\n\n已解锁至第 "+prefs.getInt("level-"+mode,1)+" 关。\n"+(saved!=null?"已有第 "+saved.level+" 关存档。":"还没有存档，从第一关开始吧。");
         track(new AlertDialog.Builder(this).setTitle(TITLES[mode]).setMessage(description)
             .setPositiveButton(saved==null?"开始游戏":"继续存档",(d,w)->launch(saved==null?fresh(mode,1):saved))
@@ -149,21 +149,34 @@ public final class NativeActivity extends Activity {
             .setNegativeButton("玩法说明",(d,w)->help(mode,()->choose(mode))).create());
     }
     private Game fresh(int mode,int level) {
-        Game g=new Game(mode,level,System.nanoTime());
+        Game g=new Game(mode,level,System.nanoTime(),mode==Game.NUMBER_SHOOTER?shooterStartingValue(level):level);
         if(mode==Game.PENGUIN) { g.stars=prefs.getInt("stars",0); g.skin=g.stars/5%3; }
         if(mode==Game.NUMBER_SHOOTER) {
-            g.value=prefs.getInt("shooter-start",1);
             g.next=prefs.getInt("shooter-rate",4);
             g.stars=prefs.getInt("shooter-coins",0);
         }
         return g;
     }
+    private Game restoreSaved(int mode) {
+        Game saved=Game.restore(prefs.getString("save-"+mode,null));
+        // A round on the ready screen has no gameplay to preserve.
+        if(mode==Game.NUMBER_SHOOTER && saved!=null && saved.state==0 && saved.elapsed==0)
+            return fresh(mode,saved.level);
+        return saved;
+    }
+    private int shooterStartBonus() {
+        return prefs.getInt("shooter-start",1)-1;
+    }
+    private int shooterStartingValue(int level) {
+        return Math.max(level+shooterStartBonus(),prefs.getInt("shooter-carry-"+level,0));
+    }
     private void shooterOptions() {
         int mode=Game.NUMBER_SHOOTER;
-        int coins=prefs.getInt("shooter-coins",0), start=prefs.getInt("shooter-start",1), rate=prefs.getInt("shooter-rate",4);
-        int startCost=start*50, rateCost=(rate-3)*75;
+        int coins=prefs.getInt("shooter-coins",0), bonus=shooterStartBonus(), rate=prefs.getInt("shooter-rate",4);
+        int maxBonus=Game.SHOOTER_MAX_START_BONUS;
+        int startCost=(bonus+1)*50, rateCost=(rate-3)*75;
         String[] options={
-            "起始数字 "+start+(start>=20?" · 已满级":" → "+(start+1)+" · "+startCost+" 金币"),
+            "开局保底加成 +"+bonus+(bonus>=maxBonus?" · 已满级":" → +"+(bonus+1)+" · "+startCost+" 金币"),
             "起始射速 "+rate+"/秒"+(rate>=12?" · 已满级":" → "+(rate+1)+"/秒 · "+rateCost+" 金币"),
             "选择关卡"
         };
@@ -171,15 +184,15 @@ public final class NativeActivity extends Activity {
             .setItems(options,(a,which)->{
                 if(which==2){levelPicker(mode);return;}
                 boolean number=which==0;
-                int cost=number?startCost:rateCost, current=number?start:rate;
-                if(current<(number?20:12) && coins>=cost) {
+                int cost=number?startCost:rateCost, current=number?bonus:rate, maximum=number?maxBonus:12;
+                if(current<maximum && coins>=cost) {
                     int balance=coins-cost;
                     SharedPreferences.Editor edit=prefs.edit().putInt("shooter-coins",balance)
-                        .putInt(number?"shooter-start":"shooter-rate",current+1);
+                        .putInt(number?"shooter-start":"shooter-rate",number?bonus+2:rate+1);
                     Game saved=Game.restore(prefs.getString("save-"+mode,null));
                     if(saved!=null){saved.stars=balance;edit.putString("save-"+mode,saved.save());}
                     edit.apply();
-                } else if(coins<cost && current<(number?20:12)) {
+                } else if(coins<cost && current<maximum) {
                     Toast.makeText(this,"金币不足",Toast.LENGTH_SHORT).show();
                 }
                 shooterOptions();
@@ -209,7 +222,10 @@ public final class NativeActivity extends Activity {
         SharedPreferences.Editor e=prefs.edit().putString("save-"+g.mode,g.save()).putInt("best-"+g.mode,Math.max(g.score,prefs.getInt("best-"+g.mode,0)));
         if(g.state==1) e.putInt("level-"+g.mode,Math.max(Math.min(60,g.level+1),prefs.getInt("level-"+g.mode,1)));
         if(g.mode==Game.PENGUIN) e.putInt("stars",Math.max(g.stars,prefs.getInt("stars",0)));
-        if(g.mode==Game.NUMBER_SHOOTER) e.putInt("shooter-coins",g.stars);
+        if(g.mode==Game.NUMBER_SHOOTER){
+            e.putInt("shooter-coins",g.stars);
+            if(g.state==1 && g.level<60) e.putInt("shooter-carry-"+(g.level+1),g.value);
+        }
         if(g.state==1) e.putInt("rating-"+g.mode+"-"+g.level,Math.max(g.rating(),prefs.getInt("rating-"+g.mode+"-"+g.level,0)));
         e.apply(); lastSave=SystemClock.uptimeMillis();
     }
@@ -218,8 +234,10 @@ public final class NativeActivity extends Activity {
         view.stop(); saveNow();
         if(dialog!=null || !foreground) return;
         Game g=view.game;
+        String nextStart=g.mode==Game.NUMBER_SHOOTER && g.state==1 && g.level<60
+            ?"\n下关开局数字 "+shooterStartingValue(g.level+1):"";
         AlertDialog d=new AlertDialog.Builder(this).setTitle(g.state==1?"过关啦！":"再挑战一次")
-            .setMessage(g.message+"\n\n第 "+g.level+" 关 · 得分 "+g.score+(g.state==1?"\n本关评价  "+new String[]{"","★","★★","★★★"}[g.rating()]:"\n再来一局，试试另一条路线。"))
+            .setMessage(g.message+"\n\n第 "+g.level+" 关 · 得分 "+g.score+(g.state==1?"\n本关评价  "+new String[]{"","★","★★","★★★"}[g.rating()]:"\n再来一局，试试另一条路线。")+nextStart)
             .setPositiveButton(g.state==1 && g.level<60?"下一关":"再来一次",(a,w)->launch(fresh(g.mode,g.state==1?Math.min(60,g.level+1):g.level)))
             .setNeutralButton("重玩本关",(a,w)->launch(fresh(g.mode,g.level)))
             .setNegativeButton("游戏大厅",(a,w)->showLibrary()).create();
