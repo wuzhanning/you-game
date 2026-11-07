@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {baseMode,isGlyphMode,glyphShapes,setGlyphShape,bodyBounds,hitBody,contact,bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT}=require('./dist/physics.js');
+const {baseMode,isGlyphMode,maxLevel,glyphShapes,setGlyphShape,bodyBounds,hitBody,contact,bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT}=require('./dist/physics.js');
 let balls=[makePlanet(0,100,400),makePlanet(0,130,400)],merges=[];
 advance(balls,b=>merges.push(b.level));assert.equal(balls.length,1);assert.deepEqual(merges,[1]);
 balls=[makePlanet(0,100,400),makePlanet(1,132,400)];advance(balls,()=>assert.fail('different planets cannot merge'));assert.equal(balls.length,2);
@@ -43,7 +43,7 @@ state.navigator.getGamepads=()=>{throw new Error('blocked API');};poll();
 console.log('PASS: gamepad movement, deadzone, button edges, pause, focus, disconnect, reconnect, replay, unsupported API');
 
 const storage=new Map(),ui={};
-const savedState={bombs:2,bombMode:false,score:60,best:90,balls:[makePlanet(2,160,400)],level:1,nextLevel:0,aim:160,cooldown:12,overTicks:0,ended:false,paused:false,discovered:new Set([0,1,2]),PLANETS,WIDTH,
+const savedState={maxLevel,bombs:2,bombMode:false,score:60,best:90,balls:[makePlanet(2,160,400)],level:1,nextLevel:0,aim:160,cooldown:12,overTicks:0,ended:false,paused:false,discovered:new Set([0,1,2]),PLANETS,WIDTH,
   localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k)||null},
   $:id=>ui[id]??=( {textContent:'',style:{}} ),setOverlay:()=>{}};
 savedState.bombRefill20261105=false;savedState.shakeGiftClaimed=false;savedState.bombGiftClaimed=false;savedState.mode='planet';savedState.shakes=3;savedState.mergeCount=0;savedState.shakeTicks=0;savedState.kind=l=>bodySpec(l,savedState.mode);
@@ -77,7 +77,7 @@ for(const [from,to] of [[8,9],[9,10]]){
   advance(pair,b=>result=b.level);assert.equal(result,to);assert.equal(pair.length,1);
 }
 const bombUI={};let bombSaves=0;
-const bombState={classicActive:false,bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
+const bombState={maxLevel,classicActive:false,bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
 bombState.bombRefill20261105=false;bombState.shakeGiftClaimed=false;bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
 bombState.baseMode=baseMode;bombState.bodyBounds=bodyBounds;
@@ -179,6 +179,31 @@ assert.match(nodes['mode-picker'].textContent,/数字/);assert.equal(vm.runInCon
 vm.runInContext("useShake();shakeBodies(balls,shakeTicks);switchMode('planet');switchMode('number');draw();",app);
 assert.equal(vm.runInContext('balls[0].level',app),1);assert.equal(vm.runInContext('shakes',app),2);assert.equal(vm.runInContext('shakeTicks',app),48);
 console.log('PASS: complete app startup, numeric rendering, real merge callbacks and mode round-trip');
+
+// The same collision engine drives the new mode, with independent labels and saves.
+assert.match(html,/data-mode="double">倍增数字球/);
+vm.runInContext(`switchMode('double');drop();cooldown=0;drop();
+  balls.forEach(b=>{b.x=240;b.y=450;});advance(balls,merged,mode);draw();`,app);
+assert.equal(vm.runInContext('kind(balls[0].level).name',app),'2');
+for(const [level,result] of [[1,'4'],[2,'8'],[11,'4096']]){
+  const pair=[makePlanet(level,190,350),makePlanet(level,210,350)];
+  advance(pair,()=>{},'double');
+  assert.equal(pair.length,1);
+  assert.equal(bodySpec(pair[0].level,'double').name,result);
+}
+const cap=maxLevel('double');
+const cappedPair=[makePlanet(cap,190,350),makePlanet(cap,210,350)];
+advance(cappedPair,()=>assert.fail('merged past safe integer limit'),'double');
+const doublingSave=JSON.parse(browserStorage.get('double-save'));
+assert.equal(doublingSave.bombs,0);
+vm.runInContext("switchMode('number');switchMode('double');",app);
+assert.match(nodes['mode-picker'].textContent,/倍增数字球/);
+assert.match(nodes.found.textContent,/最大数字 2/);
+assert.equal(vm.runInContext('score',app),doublingSave.score);
+assert.equal(vm.runInContext('bombs',app),0,'historical gifts do not apply to new mode');
+vm.runInContext("switchMode('number');",app);
+console.log('PASS: double-number drops, chain, safe maximum and independent saves');
+
 
 // Verify the actual shared drop path samples all three levels and consumes its preview.
 const randomDrops=vm.runInContext(`(()=>{

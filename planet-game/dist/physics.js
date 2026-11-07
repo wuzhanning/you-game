@@ -16,11 +16,20 @@ const WIDTH=480, HEIGHT=580, LIMIT=94;
 function makePlanet(level,x,y){return {level,x,y,vx:0,vy:0,age:0};}
 function baseMode(mode){return mode.replace('-glyph','');}
 function isGlyphMode(mode){return mode.endsWith('-glyph');}
+function maxLevel(mode){
+  switch(baseMode(mode)){
+    case 'number':return Number.MAX_SAFE_INTEGER;
+    case 'letter':return 25;
+    case 'double':return 52; // 2**52 is the last power of two within the safe integer range.
+    default:return PLANETS.length-1;
+  }
+}
 const glyphShapes=new Map();
 function bodySpec(level,mode='planet'){
   mode=baseMode(mode);
   if(mode==='planet')return PLANETS[level];
-  return {...PLANETS[level%PLANETS.length],name:mode==='letter'?String.fromCharCode(65+level):String(level),r:Math.min(104,19+level*7)};
+  const name=mode==='letter'?String.fromCharCode(65+level):String(mode==='double'?2**level:level);
+  return {...PLANETS[level%PLANETS.length],name,r:Math.min(104,19+level*7)};
 }
 function bodyRadius(level,mode='planet'){return mode!=='planet'?Math.min(104,19+level*7):PLANETS[level].r;}
 // Upright glyphs use a low-resolution compound-circle outline, including holes.
@@ -60,6 +69,7 @@ function shakeBodies(balls,ticks){
   for(const b of balls){b.vx=Math.max(-4,Math.min(4,b.vx+force));if(ticks===48){b.vy=-2.5-(b.x%17)/17;b.age=0;}}
 }
 function advance(balls,onMerge,mode='planet'){
+  const limit=maxLevel(mode);
   for(const b of balls){b.age++;b.vy+=.14;b.vx*=.993;b.x+=b.vx;b.y+=b.vy;}
   // ponytail: O(n²) pairs suit this small board; use a spatial grid if the board grows.
   for(let pass=0;pass<6;pass++){
@@ -68,7 +78,7 @@ function advance(balls,onMerge,mode='planet'){
       for(let j=i+1;j<balls.length;j++){
         const b=balls[j],ra=bodyRadius(a.level,mode),rb=bodyRadius(b.level,mode);
         const collision=contact(a,b,mode);if(!collision)continue;
-        if(a.level===b.level&&a.level<(baseMode(mode)==='number'?Number.MAX_SAFE_INTEGER:baseMode(mode)==='letter'?25:PLANETS.length-1)){
+        if(a.level===b.level&&a.level<limit){
           const level=a.level+1,merged=makePlanet(level,(a.x+b.x)/2,(a.y+b.y)/2);
           merged.vx=(a.vx+b.vx)/2;merged.vy=Math.min(0,(a.vy+b.vy)/2);merged.age=24;
           balls.splice(j,1);balls.splice(i,1,merged);onMerge(merged);return;
@@ -86,4 +96,4 @@ function advance(balls,onMerge,mode='planet'){
     }
   }
 }
-if(typeof module!=='undefined')module.exports={baseMode,isGlyphMode,glyphShapes,setGlyphShape,bodyBounds,hitBody,contact,bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT,LIMIT};
+if(typeof module!=='undefined')module.exports={baseMode,isGlyphMode,maxLevel,glyphShapes,setGlyphShape,bodyBounds,hitBody,contact,bodySpec,bodyRadius,shakeBodies,PLANETS,makePlanet,advance,WIDTH,HEIGHT,LIMIT};
