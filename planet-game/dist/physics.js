@@ -12,6 +12,11 @@ const PLANETS = [
   {name:'红巨星',r:94,color:'#f58b78',shade:'#c64f64'},
   {name:'黑洞',r:104,color:'#42345e',shade:'#21182f'}
 ];
+const DOUBLE_COLORS=[
+  '#cbc4d4','#f6a992','#f7d468','#91b5ee','#78cfca','#9cd482',
+  '#c5a2ee','#f3b56d','#f294bd','#b9d26b','#79cbe8','#ee8b88',
+  '#99a0eb','#d6ba95','#75c6a6','#e8a4da','#dfaeeb','#b1c9df'
+];
 const WIDTH=480, HEIGHT=580, LIMIT=94;
 function makePlanet(level,x,y){return {level,x,y,vx:0,vy:0,age:0};}
 function baseMode(mode){return mode.replace('-glyph','');}
@@ -28,7 +33,11 @@ const glyphShapes=new Map();
 function bodySpec(level,mode='planet'){
   mode=baseMode(mode);
   if(mode==='planet')return PLANETS[level];
-  const name=mode==='letter'?String.fromCharCode(65+level):String(mode==='double'?2**level:level);
+  if(mode==='double'){
+    const color=DOUBLE_COLORS[level%DOUBLE_COLORS.length];
+    return {name:String(2**level),r:bodyRadius(level,mode),color,shade:'#766583'};
+  }
+  const name=mode==='letter'?String.fromCharCode(65+level):String(level);
   return {...PLANETS[level%PLANETS.length],name,r:Math.min(104,19+level*7)};
 }
 function bodyRadius(level,mode='planet'){return mode!=='planet'?Math.min(104,19+level*7):PLANETS[level].r;}

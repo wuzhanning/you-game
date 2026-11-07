@@ -57,6 +57,11 @@ body.play-screen{min-height:100vh;min-height:100dvh;--board-height:max(160px,min
 #classic-board.classic-sliding > .classic-tile{background:#c6b7a9;color:transparent}
 .classic-motion{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
 .classic-motion > .classic-tile{position:absolute}
-.play-screen dialog #planet-list.double-collection{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr))}
+#help-dialog.double-help{max-width:700px}
+.play-screen dialog #planet-list.double-collection{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));grid-gap:8px}
+.play-screen dialog #planet-list.double-collection .planet-item{min-width:0}
+.double-collection .planet-item canvas{width:100%;max-width:56px;height:auto}
+.double-collection .planet-item.locked{opacity:.8}
 .double-collection .planet-item:after{display:none}
+@media(max-width:649px){.play-screen dialog #planet-list.double-collection{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media(max-width:650px) and (orientation:portrait){#classic{padding:4px 0}.classic-panel{width:100%;max-width:430px;margin:0 0 14px}.classic-panel h1{font-size:28px}.classic-panel p{margin:6px 0}#classic-board{width:calc(100vw - 28px);height:calc(100vw - 28px)}.classic-tile{font-size:24px}}

@@ -200,8 +200,10 @@ vm.runInContext("switchMode('number');switchMode('double');",app);
 assert.match(nodes['mode-picker'].textContent,/倍增数字球/);
 assert.match(nodes.found.textContent,/最大数字 2/);
 const doubleCollection=nodes['planet-list'].children;
-assert.equal(doubleCollection.length,13);
-assert.deepEqual(doubleCollection.slice(-3).map(item=>item.querySelector('span').textContent),['1024','2048','4096']);
+assert.equal(doubleCollection.length,18);
+assert.deepEqual(doubleCollection.slice(10).map(item=>item.querySelector('span').textContent),
+  ['1024','2048','4096','8192','16K','32K','64K','128K']);
+assert.equal(new Set(doubleCollection.map((_,level)=>bodySpec(level,'double').color)).size,18);
 assert.equal(vm.runInContext('score',app),doublingSave.score);
 assert.equal(vm.runInContext('bombs',app),0,'historical gifts do not apply to new mode');
 vm.runInContext("switchMode('number');",app);
