@@ -118,7 +118,7 @@ final class GameView extends View {
         if(ready) {
             rect(c,280,270,720,190,0xee20344b,28);
             text(c,NativeActivity.TITLES[game.mode],640,325,36,WHITE,true);
-            text(c,"确认出发",640,384,30,GOLD,true);
+            text(c,game.shooterDraftPending()?"确认选择开局强化":"确认出发",640,384,30,GOLD,true);
             text(c,NativeActivity.HINTS[game.mode][0],640,426,21,0xffbcdbdd,true);
         }
         c.restore();
@@ -215,6 +215,7 @@ final class GameView extends View {
     }
     private void numberShooter(Canvas c){
         rect(c,40,125,1200,510,0xffb4f3f8,0);
+        if(game.boost>0) text(c,"子弹威力 ×2",1124,164,25,INK,true);
         float finish=Game.SHOOTER_FINISH-game.progress;
         int nearColor=finish<=0?0xffb1b8cc:0xff292e38;
         quad(c,0xffe6edfa,roadX(-.54f,90),215,roadX(2.54f,90),215,1160,635,120,635);
@@ -254,7 +255,7 @@ final class GameView extends View {
             int i=shooterDepthOrder[j];
             Game.Body b=game.bodies[i]; float z=b.y-game.progress;
             float t=depth(z),s=.18f+t*t*.82f,x=roadX(b.x,z),y=roadY(z);
-            if(b.tag==1 && b.age<.14f) star(c,x,y-36*s,(30+b.age*190)*s,0xccffffff);
+            if(b.kind!=Game.SHOT && b.tag==1 && b.age<.14f) star(c,x,y-36*s,(30+b.age*190)*s,0xccffffff);
             if(b.kind==Game.SHOT){
                 line(c,x,y-9*s,x,y+3*s,0xff82a1ff,5*s);
                 outlinedNumber(c,bodyLabels[i],x,y-12*s,19*s,0xffb0c2ff);
@@ -497,7 +498,14 @@ final class GameView extends View {
         }
     }
     private void direction(int d,boolean repeat) { if(!ready) game.press(d,repeat); refresh(); invalidate(); }
-    private void confirm() { if(ready) { ready=false; start(); } else game.confirm(); refresh(); invalidate(); host.saveGame(); }
+    void startReadyRound() { ready=false; refresh(); invalidate(); start(); }
+    private void confirm() {
+        if(ready) {
+            if(game.shooterDraftPending()){host.showShooterBoosts();return;}
+            startReadyRound();
+        } else { game.confirm(); refresh(); invalidate(); }
+        host.saveGame();
+    }
     @Override public boolean onKeyDown(int code,KeyEvent event) {
         switch(code) {
             case KeyEvent.KEYCODE_DPAD_LEFT: direction(0,event.getRepeatCount()>0); return true;

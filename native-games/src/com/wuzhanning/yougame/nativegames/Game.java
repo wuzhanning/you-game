@@ -1,7 +1,11 @@
 package com.wuzhanning.yougame.nativegames;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
 import java.util.zip.CRC32;
 
 /** Continuous action games. Coordinates are world units, never board cells. */
@@ -13,6 +17,7 @@ public final class Game {
     public static final float ICE_HEIGHT=74, ARCH_TOP=92, ARCH_HEIGHT=30;
     static final int SHOOTER_FINISH=370;
     static final int SHOOTER_MAX_START_BONUS=19;
+    private static final int SHOOTER_MAX_RATE=18, SHOOTER_MAX_RANGE=85;
     private static final int[] REWARD_WALLS={2,4,8,15,25,40,63,90,125,175,240,350,500,750,1000,1564,2400};
     public static final class Body {
         public int kind, number, tag;
@@ -311,6 +316,56 @@ public final class Game {
         add(BLOCK,1,goal,target,2,200);
         message="自动发射数字子弹 · 左右换道";
     }
+    enum BoostKind { RATE, RANGE, POWER, NUMBER }
+    static final class ShooterBoost {
+        final BoostKind kind;
+        final int amount, price;
+        ShooterBoost(BoostKind kind,int amount,int price) {
+            this.kind=kind; this.amount=amount; this.price=price;
+        }
+        String label() {
+            switch(kind) {
+                case RATE:return "射速 +"+amount+"/秒";
+                case RANGE:return "射程 +"+amount;
+                case POWER:return "子弹威力 ×2 · 前 "+amount+" 秒";
+                default:return "开局数字 +"+amount;
+            }
+        }
+    }
+    boolean shooterDraftPending() {
+        // For this mode, phase=1 records that the opening choice has been used.
+        return mode==NUMBER_SHOOTER && state==0 && elapsed==0 && phase==0;
+    }
+    List<ShooterBoost> shooterBoosts() {
+        Random draw=new Random(seed);
+        List<ShooterBoost> choices=new ArrayList<>(4);
+        int rate=Math.min(SHOOTER_MAX_RATE-next,draw.nextBoolean()?2:1);
+        int range=Math.min(SHOOTER_MAX_RANGE-reserve,draw.nextBoolean()?14:8);
+        int seconds=draw.nextBoolean()?8:5;
+        int number=Math.min(LIMIT-value,Math.max(3,Math.min(120,value/12+level/2))*(draw.nextBoolean()?2:1));
+        choices.add(new ShooterBoost(BoostKind.RATE,rate,40*rate));
+        choices.add(new ShooterBoost(BoostKind.RANGE,range,5*range));
+        choices.add(new ShooterBoost(BoostKind.POWER,seconds,16*seconds));
+        if(number>0) choices.add(new ShooterBoost(BoostKind.NUMBER,number,45+number));
+        Collections.shuffle(choices,draw);
+        return choices.subList(0,3);
+    }
+    boolean pickShooterBoost(int index) {
+        if(!shooterDraftPending() || index< -1 || index>=3) return false;
+        if(index>=0){
+            ShooterBoost offer=shooterBoosts().get(index);
+            if(offer.price>stars) return false;
+            stars-=offer.price;
+            switch(offer.kind){
+                case RATE:next+=offer.amount;break;
+                case RANGE:reserve+=offer.amount;break;
+                case POWER:boost=offer.amount;break;
+                case NUMBER:value+=offer.amount;break;
+            }
+        }
+        phase=1;
+        return true;
+    }
     private void updateNumberShooter(float dt) {
         float previous=progress;
         lane+=(laneTarget-lane)*Math.min(1,dt*15);
@@ -321,7 +376,7 @@ public final class Game {
         spawn-=dt;
         if(spawn<=0){
             Body shot=add(SHOT,lane,progress+2,value,.18f,0);
-            if(shot!=null) shot.h=reserve;
+            if(shot!=null){shot.h=reserve;shot.tag=boost>0?1:0;}
             spawn=1f/next;
         }
         for(Body shot:bodies) if(shot.active && shot.kind==SHOT) {
@@ -336,9 +391,10 @@ public final class Game {
                 shot.active=false;
                 front.age=0;
                 front.tag=1;
-                if(front.kind==FOOD) front.number=capped((long)front.number+Math.max(1,shot.number/48));
+                int power=shot.tag==1?shot.number*2:shot.number;
+                if(front.kind==FOOD) front.number=capped((long)front.number+Math.max(1,power/48));
                 else if(front.kind==BLOCK){
-                    front.number=Math.max(0,front.number-Math.max(1,shot.number/8));
+                    front.number=Math.max(0,front.number-Math.max(1,power/8));
                     if(front.number==0) clearRewardWall(front);
                 } else {
                     front.vx++;
@@ -365,10 +421,10 @@ public final class Game {
                 if(value==0){lose("数字归零了，试着避开红色数字");return;}
                 event((b.number>0?"+":"")+b.number,640,500,b.number>0?0xff73abff:0xffff6969,false);
             } else if(b.kind==ADD){
-                next=Math.min(18,next+b.number);
+                next=Math.min(SHOOTER_MAX_RATE,next+b.number);
                 event("射速 +"+b.number,640,500,0xff91e758,true);
             } else if(b.kind==STAR){
-                reserve=Math.min(85,reserve+b.number);
+                reserve=Math.min(SHOOTER_MAX_RANGE,reserve+b.number);
                 event("射程 +"+b.number,640,500,0xff91e758,true);
             } else if(b.kind==MULTIPLY){
                 value=capped((long)value*2);

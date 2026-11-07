@@ -30,7 +30,7 @@ public final class NativeActivity extends Activity {
         "方向键连续移动，确认可短距离加速，冲刺冷却 2.4 秒。\n\n收集 +3 小数字，抢占 +8 和 ×2 运算环。运算环使用后冷却 7 秒。红方大于你时会追击，变得比你小时会逃跑；数字更大时碰到对手即可击败它并吸收数字。\n\n石柱会挡住双方，利用地形绕行。被更大对手撞到损失体力和部分数字。80 秒内连续击败 3 名对手获胜。",
         "方向键在连续世界中自由移动，确认短暂冲刺。黄色数字提供成长，蓝色同伴可以直接吸收；红色对手只有数字小于你时才可吞噬。\n\n更大的红方会追赶你，小红方会逃跑。先在安全处收集数字，再选择可追上的猎物。被大红方碰到会损失体力和部分数字。\n\n达到目标数字后，去地图东侧的圆形传送门撤离。右下角小地图标出你和出口的位置。100 秒内完成任务。",
         "企鹅在起伏冰坡上自动滑行，确认或上键跳跃，空中再按一次可二段跳。左键刹车、右键加速；下键快速下落，按住下键可低身穿过冰拱。\n\n冰缝需要提前跳起，空中鱼群与星星奖励准确的起跳时机。比你小的冰块可以撞碎吸收，大冰块需要跳过。摔入冰缝或撞上危险损失体力。\n\n带够小鱼到达营地过关。星星跨关保存，每 5 颗换一种企鹅配色。",
-        "确认出发后，数字会自动前进和射击。左右键换道。蓝色数字被击中会变大，碰到就加进自己的数字，数字越大，子弹威力越强。避开红色减法数字和尖刺。\n\n绿色射速门和射程门会因射击而增强，通过门可领取加成。蓝色 ×2 门让当前数字翻倍。\n\n冲过黑白线即过关。之后打破黄色数字墙赚金币，挑战终点金库。结算时手里的数字会带入下一关，开局至少等于关卡数加保底强化。赛道数字随关卡提高。"
+        "每局出发前有三种随机强化，可用金币买一项，也可以免费出发。购买只影响本局。\n\n数字会自动前进和射击，左右键换道。蓝色数字被击中会变大，碰到就加进自己的数字。避开红色减法数字和尖刺。\n\n射速门和射程门可以射击强化。蓝色 ×2 门让当前数字翻倍。冲线后打破奖励墙赚金币，挑战终点金库。结算时手里的数字会带入下一关。"
     };
     private android.media.SoundPool audio;
     private final int[] sounds=new int[6];
@@ -160,9 +160,38 @@ public final class NativeActivity extends Activity {
     private Game restoreSaved(int mode) {
         Game saved=Game.restore(prefs.getString("save-"+mode,null));
         // A round on the ready screen has no gameplay to preserve.
-        if(mode==Game.NUMBER_SHOOTER && saved!=null && saved.state==0 && saved.elapsed==0)
-            return fresh(mode,saved.level);
+        if(saved!=null && saved.shooterDraftPending()){
+            Game ready=fresh(mode,saved.level);
+            ready.seed=saved.seed;
+            return ready;
+        }
         return saved;
+    }
+    void showShooterBoosts() {
+        if(view==null || dialog!=null || !view.game.shooterDraftPending()) return;
+        Game game=view.game;
+        java.util.List<Game.ShooterBoost> offers=game.shooterBoosts();
+        String[] labels=new String[offers.size()+1];
+        for(int i=0;i<offers.size();i++){
+            Game.ShooterBoost offer=offers.get(i);
+            labels[i]=offer.label()+"  ·  "+offer.price+" 金币";
+        }
+        labels[offers.size()]="不购买，直接出发";
+        ArrayAdapter<String> options=new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,labels){
+            @Override public boolean areAllItemsEnabled(){return false;}
+            @Override public boolean isEnabled(int i){return i==offers.size() || offers.get(i).price<=game.stars;}
+            @Override public View getView(int i,View recycled,ViewGroup parent){
+                View row=super.getView(i,recycled,parent);
+                row.setEnabled(isEnabled(i));
+                return row;
+            }
+        };
+        track(new AlertDialog.Builder(this).setTitle("出发前强化 · 金币 "+game.stars)
+            .setAdapter(options,(d,i)->{
+                if(!game.pickShooterBoost(i==offers.size()?-1:i)) return;
+                saveNow();
+                view.startReadyRound();
+            }).create());
     }
     private int shooterStartBonus() {
         return prefs.getInt("shooter-start",1)-1;

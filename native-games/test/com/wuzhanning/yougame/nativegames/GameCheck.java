@@ -261,5 +261,28 @@ public final class GameCheck {
             check(Game.restore(g.save()).stars==g.stars,"wallet and completed round persist");
         }
     }
-    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); numberShooter(); savesAndBounds(); logicRegressions(); System.out.println("Arcade checks passed: "+checks); }
+    private static void shooterOpeningBoosts() {
+        Game g=new Game(Game.NUMBER_SHOOTER,2,12345,215);
+        java.util.List<Game.ShooterBoost> offers=g.shooterBoosts();
+        check(offers.size()==3 && offers.get(0).kind!=offers.get(1).kind &&
+            offers.get(1).kind!=offers.get(2).kind && offers.get(0).kind!=offers.get(2).kind,"three distinct opening offers");
+        Game.ShooterBoost first=offers.get(0), reopened=Game.restore(g.save()).shooterBoosts().get(0);
+        check(first.kind==reopened.kind && first.amount==reopened.amount && first.price==reopened.price,"unbought offers stay stable across reopening");
+        check(!g.pickShooterBoost(0) && g.shooterDraftPending(),"unaffordable purchase does not consume the choice");
+        g.stars=first.price+30;
+        check(g.pickShooterBoost(0) && g.stars==30,"exactly the shown price is charged");
+        g=Game.restore(g.save());
+        check(!g.pickShooterBoost(1) && g.stars==30,"reopening cannot buy a second boost");
+        g=new Game(Game.NUMBER_SHOOTER,1,12345);
+        check(g.pickShooterBoost(-1) && !g.shooterDraftPending() && g.stars==0,"a player without coins can start for free");
+
+        Game powered=empty(Game.NUMBER_SHOOTER), normal=empty(Game.NUMBER_SHOOTER);
+        powered.value=96; normal.value=96;
+        powered.boost=5;
+        Game.Body poweredTarget=powered.add(Game.FOOD,1,12,1,1,1);
+        Game.Body normalTarget=normal.add(Game.FOOD,1,12,1,1,1);
+        advance(powered,180); advance(normal,180);
+        check(poweredTarget.number-1==2*(normalTarget.number-1) && normalTarget.number>1,"power bonus doubles the shot's effect");
+    }
+    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); numberShooter(); shooterOpeningBoosts(); savesAndBounds(); logicRegressions(); System.out.println("Arcade checks passed: "+checks); }
 }
