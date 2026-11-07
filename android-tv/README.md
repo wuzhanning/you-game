@@ -6,7 +6,7 @@
 
 ## 真机连接
 
-当前小米 MiTV-ASTP0（Android 9）的 ADB 地址为 `192.168.0.29:5555`，由用户于 2026-11-02 更新，替代原地址 `192.168.0.35:5555`。电视需开启并授权 ADB，电脑和电视需在同一局域网。
+当前小米 MiTV-ASTP0（Android 9）的 ADB 地址为 `192.168.0.29:5555`，于 2026-11-07 连接确认。电视需开启并授权 ADB，电脑和电视需在同一局域网。
 
 ```sh
 adb connect 192.168.0.29:5555
@@ -52,6 +52,8 @@ python3 android-tv/build.py
 脚本编译 `android-tv/src` 和 `native-games/src` 并打包 `planet-game/dist` 和 `native-games/assets`，输出至 `android-tv/releases/YouGame-TV-debug.apk`。当前为便于侧载的开发签名 APK，未作为 Google Play 正式发行包。首次生成的 `.debug.keystore` 仅保存在本机，请保留以便后续覆盖安装；更换签名后无法覆盖旧包，不要通过卸载解决而丢失存档。
 
 ## 验证范围
+
+2026-11-07 在小米 MiTV-ASTP0（Android 9）覆盖安装 3.4。通过 ADB 发送遥控器方向键，确认经典 2048 的方块移动、合并和计分。返回大厅后重新进入，棋盘和分数与退出前一致。
 
 自动检查覆盖字形轮廓、合成、存档和遥控器状态切换。Android 35 ARM64 普通模拟器已验证安装启动、遥控器菜单、字形数字投放和合成、覆盖安装存档保留、暂停恢复，以及 TV 启动入口。
 
