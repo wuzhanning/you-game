@@ -57,8 +57,11 @@ function planet(c,l,x,y,r){
 }
 function drawSmall(el,l,r=20){const c=el.getContext('2d');c.clearRect(0,0,el.width,el.height);planet(c,l,el.width/2,el.height/2,r);}
 function buildCollection(){
-$('planet-list').textContent='';
-for(let l=0;l<(baseMode(mode)==='letter'?26:PLANETS.length);l++){const item=document.createElement('div');item.className='planet-item';item.innerHTML='<canvas width="112" height="112"></canvas><span></span>';$('planet-list').append(item);item.querySelector('span').textContent=kind(l).name;drawSmall(item.querySelector('canvas'),l,l===6?32:37);}
+  const list=$('planet-list'),type=baseMode(mode);
+  const count=type==='double'?13:type==='letter'?26:PLANETS.length;
+  list.className=type==='double'?'double-collection':'';
+  list.textContent='';
+  for(let l=0;l<count;l++){const item=document.createElement('div');item.className='planet-item';item.innerHTML='<canvas width="112" height="112"></canvas><span></span>';list.append(item);item.querySelector('span').textContent=kind(l).name;drawSmall(item.querySelector('canvas'),l,l===6?32:37);}
 }
 const goal=document.createElement('canvas');goal.width=180;goal.height=180;goal.style.width='90px';goal.style.height='90px';$('goal-art').append(goal);drawSmall(goal,4,63);
 const demo=$('demo').getContext('2d');planet(demo,1,32,36,19);planet(demo,1,89,36,19);planet(demo,2,180,36,26);demo.font='18px system-ui';demo.fillStyle='#b0a4b9';demo.fillText('+',57,41);demo.fillText('→',125,41);
