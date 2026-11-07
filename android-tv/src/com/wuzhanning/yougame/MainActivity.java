@@ -11,7 +11,7 @@ public class MainActivity extends Activity {
     private WebView web;
     private boolean ready;
     private static final String HOST = "game.local";
-    private static final Set<String> FILES = new HashSet<>(Arrays.asList("index.html", "game.js", "physics.js", "tv.js", "style.css"));
+    private static final Set<String> FILES = new HashSet<>(Arrays.asList("index.html", "game.js", "physics.js", "tv.js", "2048.js", "style.css"));
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -73,13 +73,15 @@ public class MainActivity extends Activity {
             float axis = event.getAxisValue(MotionEvent.AXIS_X);
             if (Math.abs(axis) < .2f) axis = event.getAxisValue(MotionEvent.AXIS_HAT_X);
             axis = Math.abs(axis) < .2f ? 0 : Math.max(-1, Math.min(1, axis));
-            web.evaluateJavascript("window.tvAxis=" + axis, null);
+            float vertical = event.getAxisValue(MotionEvent.AXIS_Y);
+            if (Math.abs(vertical) < .2f) vertical = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
+            web.evaluateJavascript("window.tvAxis=" + axis + ";if(window.tvStick)window.tvStick(" + axis + "," + vertical + ");", null);
             return true;
         }
         return super.dispatchGenericMotionEvent(event);
     }
     @Override protected void onPause() {
-        if (web != null) { web.evaluateJavascript("window.tvAxis=0;if(typeof saveGame==='function'){if(!paused&&!ended)togglePause();saveGame();}", null); web.onPause(); }
+        if (web != null) { web.evaluateJavascript("window.tvAxis=0;if(window.tvStick)window.tvStick(0,0);if(typeof saveGame==='function'){if(!classicActive&&!paused&&!ended)togglePause();saveGame();}", null); web.onPause(); }
         super.onPause();
     }
     @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }

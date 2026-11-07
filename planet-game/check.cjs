@@ -17,7 +17,7 @@ const vm=require('node:vm'),fs=require('node:fs');
 const source=fs.readFileSync(__dirname+'/dist/game.js','utf8');
 const pad={index:0,id:'test controller',connected:true,mapping:'standard',axes:[0],buttons:Array.from({length:16},()=>({pressed:false}))};
 let pads=[pad],focused=true,drops=0,restarts=0,message={textContent:''};
-const state={navigator:{getGamepads:()=>pads},document:{hidden:false,hasFocus:()=>focused,querySelector:()=>null},$:()=>message,PLANETS,WIDTH,level:0,aim:240,paused:false,ended:false,bombMode:false};
+const state={classicActive:false,navigator:{getGamepads:()=>pads},document:{hidden:false,hasFocus:()=>focused,querySelector:()=>null},$:()=>message,PLANETS,WIDTH,level:0,aim:240,paused:false,ended:false,bombMode:false};
 state.drop=()=>drops++;state.requestDrop=state.drop;
 state.togglePause=()=>{if(!state.ended)state.paused=!state.paused;};
 state.reset=()=>{restarts++;state.paused=false;state.ended=false;};
@@ -77,7 +77,7 @@ for(const [from,to] of [[8,9],[9,10]]){
   advance(pair,b=>result=b.level);assert.equal(result,to);assert.equal(pair.length,1);
 }
 const bombUI={};let bombSaves=0;
-const bombState={bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
+const bombState={classicActive:false,bombs:0,bombMode:false,bombTarget:0,balls:[makePlanet(0,100,350),makePlanet(4,240,450)],score:0,best:0,discovered:new Set([0]),particles:[],paused:false,ended:false,overTicks:70,level:0,nextLevel:0,aim:240,cooldown:0,PLANETS,WIDTH,
   document:{querySelector:()=>null},$:id=>bombUI[id]??={textContent:'',style:{},setAttribute(){}},beep(){},update(){},saveGame(){bombSaves++;}};
 bombState.bombRefill20261105=false;bombState.shakeGiftClaimed=false;bombState.bombGiftClaimed=false;bombState.mode='planet';bombState.shakes=3;bombState.mergeCount=0;bombState.shakeTicks=0;bombState.kind=l=>bodySpec(l,bombState.mode);
 bombState.baseMode=baseMode;bombState.bodyBounds=bodyBounds;
@@ -117,7 +117,7 @@ console.log('PASS: repeated D rewards in both letter modes; other letters give n
 
 
 let renders=0,physicsSteps=0,rafCalls=0,polls=0;
-const scheduler={pendingDrop:null,flushDrop(){},padKey:null,document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
+const scheduler={classicActive:false,pendingDrop:null,flushDrop(){},padKey:null,document:{hidden:false,querySelector:()=>null},paused:true,ended:false,bombMode:false,bombTarget:0,aim:240,balls:[],particles:[],cooldown:0,overTicks:0,PLANETS,LIMIT:94,
   requestAnimationFrame:()=>++rafCalls,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},pollGamepad:()=>polls++,draw:()=>renders++,advance:()=>physicsSteps++,merged(){},updateBomb(){},beep(){},saveGame(){},setOverlay(){}};
 scheduler.mode='planet';scheduler.shakes=3;scheduler.mergeCount=0;scheduler.shakeTicks=0;scheduler.kind=l=>bodySpec(l,scheduler.mode);
 scheduler.baseMode=baseMode;scheduler.bodyBounds=bodyBounds;
@@ -163,7 +163,7 @@ const html=fs.readFileSync(__dirname+'/dist/index.html','utf8');
 const fakeCanvas=new Proxy({createRadialGradient:()=>({addColorStop(){}})},{get:(target,key)=>target[key]??(()=>{})});
 function element(tag='div'){
   const el={tagName:tag.toUpperCase(),width:112,height:112,children:[],style:{},dataset:{},textContent:'',hidden:false,
-    getContext:()=>fakeCanvas,setAttribute(){},addEventListener(){},focus(){},append(child){this.children.push(child);},replaceChildren(){this.children=[];},
+    getContext:()=>fakeCanvas,setAttribute(){},removeAttribute(){},addEventListener(){},focus(){},append(child){this.children.push(child);},replaceChildren(){this.children=[];},
     querySelector(selector){return this.parts[selector]??=(element(selector));},parts:{},close(){this.open=false;},showModal(){this.open=true;}};
   Object.defineProperty(el,'textContent',{get(){return this.text||'';},set(value){this.text=value;this.children=[];}});
   return el;
@@ -171,7 +171,7 @@ function element(tag='div'){
 const nodes=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],element()]));
 nodes.game.parentElement=element();
 const browserStorage=new Map([['planet-sound','off']]);
-const app={console,document:{getElementById:id=>nodes[id]||null,createElement:element,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){},hidden:false,hasFocus:()=>true},window:{addEventListener(){}},navigator:{},localStorage:{getItem:k=>browserStorage.get(k)||null,setItem:(k,v)=>browserStorage.set(k,v)},requestAnimationFrame:()=>1,cancelAnimationFrame(){},setInterval(){},setTimeout:()=>1,clearTimeout(){}};
+const app={console,URLSearchParams,location:{search:''},document:{body:{classList:{toggle(){}}},getElementById:id=>nodes[id]||null,createElement:element,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){},hidden:false,hasFocus:()=>true},window:{addEventListener(){}},navigator:{},localStorage:{getItem:k=>browserStorage.get(k)||null,setItem:(k,v)=>browserStorage.set(k,v)},requestAnimationFrame:()=>1,cancelAnimationFrame(){},setInterval(){},setTimeout:()=>1,clearTimeout(){}};
 vm.createContext(app);vm.runInContext(fs.readFileSync(__dirname+'/dist/physics.js','utf8'),app);vm.runInContext(source,app);
 assert.match(nodes['mode-picker'].textContent,/星球/);assert.equal(nodes['planet-list'].children.length,11);
 vm.runInContext("switchMode('number'); balls=[makePlanet(0,100,400),makePlanet(0,120,400)];advance(balls,merged,mode);draw();",app);
@@ -275,7 +275,7 @@ const tvButtons=[0,1,2].map(()=>({disabled:false,focus(){tv.document.activeEleme
 let tvDialog=null,tvDrops=0,tvBombs=0,tvShakes=0;
 const tvMenu={showModal(){tvDialog=this;tvButtons[0].focus();},close(){tvDialog=null;},querySelectorAll:()=>tvButtons};
 const tvNodes={};
-const tv={innerHeight:540,innerWidth:960,URLSearchParams,location:{search:'?tv=1'},window:{addEventListener(){}},document:{body:{style:{setProperty(){}},classList:{add(){}}},querySelector:()=>tvDialog,querySelectorAll:()=>[]},$:id=>id==='tv-menu'?tvMenu:(tvNodes[id]||(tvNodes[id]={})),unlockAudio(){},paused:false,ended:false,bombMode:false,aim:240,WIDTH:480,togglePause(){tv.paused=!tv.paused;},requestDrop(){tvDrops++;},toggleBomb(){tvBombs++;},useShake(){tvShakes++;},reset(){tv.ended=false;},removePlanet(){},selectBombTarget(){}};
+const tv={classicActive:false,innerHeight:540,innerWidth:960,URLSearchParams,location:{search:'?tv=1'},window:{addEventListener(){}},document:{body:{style:{setProperty(){}},classList:{add(){}}},querySelector:()=>tvDialog,querySelectorAll:()=>[]},$:id=>id==='tv-menu'?tvMenu:(tvNodes[id]||(tvNodes[id]={})),unlockAudio(){},paused:false,ended:false,bombMode:false,aim:240,WIDTH:480,togglePause(){tv.paused=!tv.paused;},requestDrop(){tvDrops++;},toggleBomb(){tvBombs++;},useShake(){tvShakes++;},reset(){tv.ended=false;},removePlanet(){},selectBombTarget(){}};
 vm.createContext(tv);vm.runInContext(fs.readFileSync(__dirname+'/dist/tv.js','utf8'),tv);
 assert(tvNodes['gamepad-status'].textContent);assert.doesNotMatch(tvNodes['gamepad-status'].textContent,/B |X /);assert.match(tvNodes['help-gamepad'].textContent,/Start/);
 tv.window.tvInput('ok');assert.equal(tvDrops,1);tv.window.tvInput('right');assert.equal(tv.aim,258);
@@ -308,3 +308,45 @@ const failedRefill=vm.runInContext(`(()=>{
 })()`,app);
 assert(failedRefill,'failed storage write must not change live items or mark refill claimed');
 console.log('PASS: all five saves refill to exactly 100 once, preserving progress and handling failed writes');
+
+const {slide2048,canMove2048,spawn2048}=require('./dist/2048.js');
+const tiles=[2,2,2,2,4,0,4,8,0,0,0,0,0,0,0,0];
+assert.deepEqual(slide2048(tiles,'left'),{next:[4,4,0,0,8,8,0,0,0,0,0,0,0,0,0,0],points:16,changed:true});
+assert.deepEqual(slide2048(tiles,'right').next.slice(0,8),[0,0,4,4,0,0,8,8]);
+assert.deepEqual(slide2048(tiles,'up').next.slice(0,8),[2,2,2,2,4,0,4,8]);
+assert(!slide2048(tiles,'up').changed);
+assert.deepEqual(slide2048(tiles,'down').next.slice(8),[2,0,2,2,4,2,4,8]);
+const blocked=[2,4,2,4,4,2,4,2,2,4,2,4,4,2,4,2];
+assert(!canMove2048(blocked));blocked[15]=4;assert(canMove2048(blocked));
+const rolls=[.99,.95],empty=Array(16).fill(0);spawn2048(empty,()=>rolls.shift());
+assert.equal(empty[15],4);assert.equal(empty.filter(Boolean).length,1);
+
+const classicSource=fs.readFileSync(__dirname+'/dist/2048.js','utf8');
+vm.runInContext(classicSource,app);
+const previousRound=browserStorage.get('number-glyph-save');
+browserStorage.set('classic-2048-save',JSON.stringify({board:[1024,1024,...Array(14).fill(0)],score:20,best:20,continued:false}));
+nodes['choose-classic'].onclick();
+assert.match(nodes['mode-picker'].textContent,/2048/);assert(nodes['drop-layout'].hidden);
+const classicSave=()=>JSON.parse(browserStorage.get('classic-2048-save'));
+vm.runInContext("classicUI.move('left')",app);
+assert.equal(classicSave().board[0],2048);assert.equal(classicSave().board.filter(Boolean).length,2);
+assert.equal(classicSave().score,2068);assert(!nodes['classic-continue'].hidden);
+const winningSave=browserStorage.get('classic-2048-save');
+vm.runInContext("classicUI.move('down')",app);
+assert.equal(browserStorage.get('classic-2048-save'),winningSave,'win waits for confirmation');
+nodes['classic-continue'].onclick();assert(classicSave().continued);
+vm.runInContext('classicUI.select(false);classicUI.select(true);',app);
+assert(nodes['classic-continue'].hidden);assert.equal(classicSave().best,2068);
+vm.runInContext('classicUI.reset()',app);
+assert.equal(classicSave().board.filter(Boolean).length,2);
+assert.equal(classicSave().score,0);assert.equal(classicSave().best,2068);
+assert.equal(browserStorage.get('number-glyph-save'),previousRound,'2048 preserves other mode saves');
+const classicMoves=[];
+tv.classicActive=true;tv.direction2048=vm.runInContext('direction2048',app);
+tv.classicUI={move:direction=>classicMoves.push(direction),menu:()=>tvMenu.showModal(),confirm:()=>classicMoves.push('ok')};
+for(const direction of ['left','right','up','down','ok'])assert(tv.window.tvInput(direction));
+tv.window.tvStick(0,-1);tv.window.tvStick(0,-1);tv.window.tvStick(0,0);tv.window.tvStick(0,-1);
+assert.deepEqual(classicMoves,['left','right','up','down','ok','up','up']);
+tvMenu.id='classic-menu';
+assert(tv.window.tvInput('back'));assert.equal(tv.window.tvInput('back'),false);
+console.log('PASS: classic 2048 merges once per tile, scores, spawns, detects a blocked board, continues after winning, saves separately and accepts TV inputs');

@@ -1,6 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
+let classicActive=false,classicUI;
 let mode='planet',shakes=3,mergeCount=0,shakeTicks=0;
 try{const savedMode=localStorage.getItem('game-mode');if(['number','letter','number-glyph','letter-glyph'].includes(savedMode))mode=savedMode;}catch(error){}
 function kind(l){
@@ -169,7 +170,7 @@ function requestDrop(x=aim){
 function flushDrop(){
   if(cooldown===0&&pendingDrop!==null){const x=pendingDrop;pendingDrop=null;drop(x);}
 }
-function drop(x=aim){if(bombMode||paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=kind(level).r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep('drop');update();saveGame();return true;}
+function drop(x=aim){if(classicActive||bombMode||paused||ended||cooldown>0||document.querySelector('dialog[open]'))return false;const r=kind(level).r;aim=Math.max(r+9,Math.min(WIDTH-r-9,x));balls.push(makePlanet(level,aim,45));discovered.add(level);level=nextLevel;nextLevel=Math.floor(Math.random()*3);cooldown=42;$('hint').style.opacity=0;beep('drop');update();saveGame();return true;}
 function setOverlay(title,copy,button){$('overlay-title').textContent=title;$('overlay-copy').textContent=copy;$('resume').textContent=button;$('overlay').hidden=false;}
 function togglePause(){if(ended)return;pendingDrop=null;bombMode=false;paused=!paused;updateBomb();$('pause').textContent=paused?'▷ 继续':'Ⅱ 暂停';if(paused)setOverlay('休息一下','小星球会在这里等你','继续探索');else $('overlay').hidden=true;saveGame();}
 function reset(persist=true){pendingDrop=null;shakes=3;mergeCount=0;shakeTicks=0;bombs=0;bombMode=false;bombTarget=0;balls=[];particles=[];score=0;level=0;nextLevel=0;aim=240;paused=false;ended=false;cooldown=0;overTicks=0;discovered=new Set([0]);$('overlay').hidden=true;$('pause').textContent='Ⅱ 暂停';$('hint').style.opacity=1;$('status').textContent=baseMode(mode)==='letter'?'✧ 两个相同字母合成下一个字母，向 Z 出发！':baseMode(mode)==='number'?'✧ 两个相同数字合成下一个数字':'✧ 两颗相同的星球，会变成一颗新星球';update();if(persist){saveGame();beep('start');}}
@@ -239,10 +240,10 @@ function draw(){
 }
 // Standard mapping: left stick / D-pad, south face button, Start.
 const STICK_DEADZONE=.2;
-let padKey=null,padButtons=[],padMessage='';
+let padKey=null,padButtons=[],padMessage='',padStick=null;
 function pollGamepad(elapsed){
   if(typeof window!=='undefined'&&window.nativeTV){
-    if(!paused&&!ended&&!bombMode&&!document.querySelector('dialog[open]'))aim=Math.max(30,Math.min(WIDTH-30,aim+(window.tvAxis||0)*300*elapsed/1000));
+    if(!classicActive&&!paused&&!ended&&!bombMode&&!document.querySelector('dialog[open]'))aim=Math.max(30,Math.min(WIDTH-30,aim+(window.tvAxis||0)*300*elapsed/1000));
     return;
   }
   let pads=[];
@@ -252,9 +253,12 @@ function pollGamepad(elapsed){
   const message=pad?'手柄已连接 · 左摇杆 / 方向键移动 · A / × 投放 · B 炸弹 · X 摇一摇 · Select 模式 · Start 暂停':pads.length?'此手柄按键布局未识别，请使用标准手柄模式':'手柄未就绪 · 连接后按一下手柄按键';
   if(message!==padMessage){$('gamepad-status').textContent=message;padMessage=message;}
   const changed=key!==padKey;
-  if(changed&&padKey!==null&&!paused&&!ended)togglePause();
+  if(changed&&padKey!==null&&!classicActive&&!paused&&!ended)togglePause();
   const buttons=pad?pad.buttons.map(b=>b.pressed):[];
   const pressed=i=>!changed&&buttons[i]&&!padButtons[i];
+  const stickDirection=pad&&classicActive?direction2048(pad.axes[0],pad.axes[1]):null;
+  const stickPressed=!changed&&stickDirection!==padStick?stickDirection:null;
+  padStick=stickDirection;
   padKey=key;
   if(pad&&!document.hidden&&document.hasFocus()){
     const dialog=document.querySelector('dialog[open]');
@@ -266,11 +270,17 @@ function pollGamepad(elapsed){
         else {const first=dialog.querySelector('button');if(first)first.focus();}
       }
       const choices=[...dialog.querySelectorAll('button')];
-      if(pressed(14)||pressed(15)){
+      if(pressed(14)||pressed(15)||(classicActive&&(pressed(12)||pressed(13)))){
         const index=choices.indexOf(document.activeElement);
-        const choice=choices[(index+(pressed(14)?-1:1)+choices.length)%choices.length];if(choice)choice.focus();
+        const choice=choices[(index+(pressed(14)||pressed(12)?-1:1)+choices.length)%choices.length];if(choice)choice.focus();
       }
     }else if(pressed(8)){$('mode-dialog').showModal();}
+    else if(classicActive){
+      const direction=pressed(12)?'up':pressed(13)?'down':pressed(14)?'left':pressed(15)?'right':stickPressed;
+      if(pressed(9)||pressed(1))classicUI.menu();
+      else if(pressed(0))classicUI.confirm();
+      else if(direction)classicUI.move(direction);
+    }
     else if(pressed(9)){togglePause();}
     else if(pressed(0)&&(paused||ended)){ended?reset():togglePause();}
     else if(!paused&&!ended&&pressed(2)){useShake();}
@@ -292,7 +302,7 @@ function pollGamepad(elapsed){
   // Always sample held buttons, including while dialogs or another window have focus.
   padButtons=buttons;
 }
-window.addEventListener('blur',()=>{if(!paused&&!ended)togglePause();});
+window.addEventListener('blur',()=>{if(!classicActive&&!paused&&!ended)togglePause();});
 
 let previous=0,accumulator=0,frameId=0,idleTimer=0,lastDrawKey='',previousInput=0;
 function stopFrames(){cancelAnimationFrame(frameId);clearTimeout(idleTimer);frameId=0;idleTimer=0;previous=0;previousInput=0;accumulator=0;}
@@ -302,6 +312,11 @@ function frame(now){
  if(document.hidden){stopFrames();return;}
  // Read button edges every display frame, independently of the paint throttle.
  const inputElapsed=previousInput?Math.min(now-previousInput,50):0;previousInput=now;pollGamepad(inputElapsed);
+ if(classicActive){
+   if(padKey!==null)frameId=requestAnimationFrame(frame);
+   else idleTimer=setTimeout(()=>{frameId=requestAnimationFrame(frame);},100);
+   return;
+ }
  // Cap painting at 30 fps even on 120/144 Hz screens; physics stays at 60 Hz.
  if(previous&&now-previous<1000/30-1){frameId=requestAnimationFrame(frame);return;}
  const elapsed=previous?Math.min(now-previous,50):0;previous=now;
@@ -325,8 +340,15 @@ document.addEventListener('keydown',e=>{
   const target=e.target;
   if(document.querySelector('dialog[open]')||(target&&target.isContentEditable)||['INPUT','TEXTAREA','SELECT'].includes((target&&target.tagName)))return;
   if((target&&target.tagName)==='BUTTON'&&[' ','Enter'].includes(e.key))return;
-  if(['s','S'].includes(e.key)){e.preventDefault();if(!e.repeat)useShake();return;}
   if(['m','M'].includes(e.key)){e.preventDefault();if(!e.repeat)$('mode-dialog').showModal();return;}
+  if(classicActive){
+    const direction=e.key.slice(5).toLowerCase();
+    if(e.key.startsWith('Arrow')&&classicDirections.includes(direction)){e.preventDefault();if(!e.repeat)classicUI.move(direction);}
+    else if(e.key==='Escape'){e.preventDefault();if(!e.repeat)classicUI.menu();}
+    else if(e.key==='Enter'||e.key===' '){e.preventDefault();if(!e.repeat)classicUI.confirm();}
+    return;
+  }
+  if(['s','S'].includes(e.key)){e.preventDefault();if(!e.repeat)useShake();return;}
   if(['b','B','Escape'].includes(e.key)){e.preventDefault();if(!e.repeat&&(e.key!=='Escape'||bombMode))toggleBomb();return;}
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter'].includes(e.key))return;
   e.preventDefault();
@@ -335,13 +357,19 @@ document.addEventListener('keydown',e=>{
 });
 $('shake').onclick=()=>{useShake();canvas.focus({preventScroll:true});};
 $('mode-picker').onclick=()=>$('mode-dialog').showModal();
-document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>{if(switchMode(button.dataset.mode))$('mode-dialog').close();});
+document.querySelectorAll('[data-mode]').forEach(button=>button.onclick=()=>{if(switchMode(button.dataset.mode)){if(classicActive)classicUI.select(false);$('mode-dialog').close();}});
 $('close-mode').onclick=()=>$('mode-dialog').close();
 $('bomb').onclick=()=>{toggleBomb();canvas.focus({preventScroll:true});};
 $('pause').onclick=()=>{togglePause();canvas.focus({preventScroll:true});};$('resume').onclick=()=>{ended?reset():togglePause();canvas.focus({preventScroll:true});};
-document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>canvas.focus({preventScroll:true})));
+document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>{if(!document.querySelector('dialog[open]'))classicActive?classicUI.focus():canvas.focus({preventScroll:true});}));
 window.addEventListener('focus',wakeFrames);
-$('restart').onclick=()=>$('restart-dialog').showModal();$('cancel-reset').onclick=()=>$('restart-dialog').close();$('confirm-reset').onclick=()=>{$('restart-dialog').close();reset();};
+function openRestart(){
+  $('reset-title').textContent=classicActive?'重新开始 2048？':'开启新的宇宙？';
+  $('reset-copy').textContent=classicActive?'当前棋盘和分数会清空，最高分会保留。':'本次星光会重新计算，个人最佳会保留。';
+  $('confirm-reset').textContent=classicActive?'重新开始':'重新出发';
+  $('restart-dialog').showModal();
+}
+$('restart').onclick=openRestart;$('cancel-reset').onclick=()=>$('restart-dialog').close();$('confirm-reset').onclick=()=>{$('restart-dialog').close();classicActive?classicUI.reset():reset();};
 $('help').onclick=()=>$('help-dialog').showModal();document.querySelectorAll('#help-dialog .close').forEach(b=>b.onclick=()=>$('help-dialog').close());
 $('sound').onclick=()=>{sound=!sound;soundButton();try{localStorage.setItem('planet-sound',sound?'on':'off');}catch(error){}if(sound)beep('start');else audioContext&&audioContext.suspend().catch(()=>{});};
 document.addEventListener('pointerdown',unlockAudio,{capture:true});
@@ -355,7 +383,7 @@ $('fullscreen').onclick=async()=>{
 document.addEventListener('fullscreenchange',()=>{$('fullscreen').textContent=document.fullscreenElement?'退出全屏':'全屏';});
 window.addEventListener('pagehide',()=>{saveGame();stopFrames();});
 window.addEventListener('pageshow',wakeFrames);
-setInterval(()=>{if(!paused&&!ended&&!document.hidden)saveGame();},1000);
-document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!paused&&!ended)togglePause();saveGame();stopFrames();audioContext&&audioContext.suspend().catch(()=>{});}else wakeFrames();});
+setInterval(()=>{if(!classicActive&&!paused&&!ended&&!document.hidden)saveGame();},1000);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(!classicActive&&!paused&&!ended)togglePause();saveGame();stopFrames();audioContext&&audioContext.suspend().catch(()=>{});}else wakeFrames();});
 if(document.modelContext&&document.modelContext.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'drop_planet',description:'在当前游戏横坐标 0 到 480 的位置投放一颗星球。',inputSchema:{type:'object',properties:{x:{type:'number',minimum:0,maximum:480}},required:['x'],additionalProperties:false},annotations:{readOnlyHint:false},execute(input){if(!input||typeof input.x!=='number'||!Number.isFinite(input.x)||input.x<0||input.x>480)throw new Error('x 必须在 0 到 480 之间');const dropped=drop(input.x);return {dropped,score,planetCount:balls.length};}})).catch(()=>{});}catch(error){}}
 if(restoreGame()){grantBombGift();grantShakeGift();refillBombs();}buildCollection();soundButton();update();wakeFrames();

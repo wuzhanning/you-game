@@ -10,10 +10,17 @@
   $('help-intro').textContent='电视遥控器：左右方向键选择位置，确认键投放。两颗相同的星球碰在一起，就会合成更大的星球！';
   $('help-controls').textContent='遥控器：上下方向键打开操作菜单，可选择炸弹、摇一摇、模式和重新开始。菜单内方向键选择，确认执行，返回关闭。游戏中返回键暂停，暂停后确认继续，再按返回退出。';
   $('help-gamepad').textContent='TV 版也支持蓝牙手柄：左摇杆或方向键移动，A 投放，B 炸弹，X 摇一摇，Start 暂停，Select 打开操作菜单。菜单内方向键选择，A 确认，B 返回。';
+  let stick=null;
+  window.tvStick=function(x,y){
+    const direction=direction2048(x,y);
+    if(classicActive&&direction&&direction!==stick)classicUI.move(direction);
+    stick=direction;
+  };
   window.tvInput=function(action){
     unlockAudio();
     const dialog=document.querySelector('dialog[open]');
     if(dialog){
+      if(classicActive&&action==='back'&&dialog.id==='classic-menu'){dialog.close();return false;}
       if(action==='back'||action==='menu'||action==='bomb'){dialog.close();return true;}
       const buttons=[...dialog.querySelectorAll('button')].filter(b=>!b.disabled);
       if(['left','right','up','down'].includes(action)){
@@ -22,6 +29,12 @@
       }else if(action==='ok'){
         const button=buttons.includes(document.activeElement)?document.activeElement:buttons[0];if(button)button.click();
       }
+      return true;
+    }
+    if(classicActive){
+      if(['left','right','up','down'].includes(action))classicUI.move(action);
+      else if(action==='ok')classicUI.confirm();
+      else if(['back','menu','pause'].includes(action))classicUI.menu();
       return true;
     }
     if(action==='back'){if(paused||ended)return false;togglePause();return true;}
@@ -34,7 +47,7 @@
     }else if(action==='bomb')toggleBomb();else if(action==='shake')useShake();
     return true;
   };
-  $('tv-controls').onclick=()=>$('tv-menu').showModal();
-  const actions={continue:()=>{if(paused&&!ended)togglePause();},bomb:toggleBomb,shake:useShake,mode:()=>$('mode-dialog').showModal(),help:()=>$('help-dialog').showModal(),restart:()=>$('restart-dialog').showModal()};
+  $('tv-controls').onclick=()=>classicActive?classicUI.menu():$('tv-menu').showModal();
+  const actions={continue:()=>{if(paused&&!ended)togglePause();},bomb:toggleBomb,shake:useShake,mode:()=>$('mode-dialog').showModal(),help:()=>$('help-dialog').showModal(),restart:()=>openRestart()};
   document.querySelectorAll('[data-tv]').forEach(b=>b.onclick=()=>{$('tv-menu').close();actions[b.dataset.tv]();});
 })();

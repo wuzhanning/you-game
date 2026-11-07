@@ -31,3 +31,26 @@ body.play-screen{min-height:100vh;min-height:100dvh;--board-height:max(160px,min
 .tv #overlay{padding:12px}.tv #overlay .overlay-star{font-size:26px}.tv #overlay h2{font-size:20px;margin:8px 0}.tv #overlay p{font-size:12px;margin:8px 0}.tv #overlay .primary{padding:8px 16px}
 
 .tv dialog{max-height:90vh}.tv .header-actions>*{margin-left:10px}.tv .game-top>*{margin-right:6px}.tv .mode-choices button{margin:7px}.tv #gamepad-status{line-height:1.4}
+
+.play-screen #drop-layout[hidden],#classic[hidden],#classic [hidden],.classic-mode #help{display:none}
+#classic{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 0;color:#534434}
+.classic-panel{width:220px;margin:0 24px 0 0}.classic-panel h1{font-size:34px;margin:0 0 12px}
+.classic-panel p{font-size:14px;line-height:1.5;margin:10px 0}
+.classic-panel button{margin:4px 6px 4px 0}
+.classic-scores{display:flex;gap:8px}
+.classic-scores span{background:#efe5d8;border-radius:10px;padding:8px 10px;font-size:13px;flex:1}
+.classic-scores b{display:block;font-size:22px}
+#classic-board{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);grid-gap:8px;width:72vh;height:72vh;max-width:430px;max-height:430px;padding:8px;background:#a49280;border-radius:14px;touch-action:none;user-select:none}
+#classic-board:focus-visible{outline:3px solid #8b74ba;outline-offset:4px}
+.classic-tile{display:flex;align-items:center;justify-content:center;min-width:0;background:#c6b7a9;color:#fff;border-radius:7px;font-weight:800;font-size:30px;font-variant-numeric:tabular-nums}
+.classic-tile[data-value="2"]{background:#f4eade;color:#534434}
+.classic-tile[data-value="4"]{background:#f3dcb6;color:#534434}
+.classic-tile[data-value="8"]{background:#a65529}
+.classic-tile[data-value="16"]{background:#a6442b}
+.classic-tile[data-value="32"]{background:#a33232}
+.classic-tile[data-value="64"]{background:#8f2633}
+.classic-tile[data-value="128"],.classic-tile[data-value="256"]{background:#8b5a16}
+.classic-tile[data-value="512"],.classic-tile[data-value="1024"]{background:#735016}
+.classic-tile[data-value="2048"]{background:#5d3b9c}
+.classic-tile[data-large]{background:#493359;font-size:20px}
+@media(max-width:650px) and (orientation:portrait){#classic{padding:4px 0}.classic-panel{width:100%;max-width:430px;margin:0 0 14px}.classic-panel h1{font-size:28px}.classic-panel p{margin:6px 0}#classic-board{width:calc(100vw - 28px);height:calc(100vw - 28px)}.classic-tile{font-size:24px}}
