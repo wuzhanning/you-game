@@ -12,15 +12,16 @@ import android.widget.*;
 
 /** TV launcher and explicit pause/results dialogs; legacy game remains a separate Activity. */
 public final class NativeActivity extends Activity {
-    static final String[] TITLES={"数字弹射", "叠塔工坊", "数字疾跑", "运算竞技场", "红蓝吞噬", "企鹅冰原"};
-    private static final String[] SUBTITLES={"借墙反弹 · 一发连锁翻倍", "看准时机 · 完美落点修复塔宽", "三道冲刺 · 跳栏滑行选运算门", "自由走位 · 抢运算环击败对手", "追逐与避让 · 长大后撤离", "起伏冰坡 · 二段跳越过冰缝"};
+    static final String[] TITLES={"数字弹射", "叠塔工坊", "数字疾跑", "运算竞技场", "红蓝吞噬", "企鹅冰原", "数字合并奔跑"};
+    private static final String[] SUBTITLES={"借墙反弹 · 一发连锁翻倍", "看准时机 · 完美落点修复塔宽", "三道冲刺 · 跳栏滑行选运算门", "自由走位 · 抢运算环击败对手", "追逐与避让 · 长大后撤离", "起伏冰坡 · 二段跳越过冰缝", "自动射击 · 强化数字 · 冲击奖励金库"};
     static final String[][] HINTS={
         {"左右瞄准 · 确认发射 · 上键换弹"},
         {"确认落塔 · 左右微调移动方块"},
         {"左右换道 · 上 / 确认跳跃 · 下滑行"},
         {"方向键持续移动 · 确认短距离冲刺"},
         {"方向键自由移动 · 确认冲刺 · 东侧出口"},
-        {"确认二段跳 · 左刹车 / 右加速 · 按住下滑行"}
+        {"确认二段跳 · 左刹车 / 右加速 · 按住下滑行"},
+        {"左右换道 · 自动发射数字子弹 · 射击蓝色数字和绿色门"}
     };
     private static final String[] DETAILS={
         "左右键瞄准，确认发射，上键交换当前弹与备用弹。数字球可以从侧墙反弹。\n\n相同数字相碰会翻倍，合成后的球还会吸收紧贴的相同数字，触发连锁。每 4 发，顶部球群下压一次；压过警戒线或 90 秒耗尽时失败。\n\n目标从合成 32 逐步增加至 256。先观察球群，再选择直射、反弹或换弹，别用不同数字堵住好位置。",
@@ -28,7 +29,8 @@ public final class NativeActivity extends Activity {
         "左右键切换三条跑道，上或确认跳跃，下键滑行。蓝色数字直接相加；选择 +10 或 ×2 运算门，避开 −5。\n\n实心路障必须换道；红白矮栏要跳过；高横梁要滑行通过。空中的星星只有跳起才能拿到。障碍每次消耗 1 点体力并损失四分之一数字。\n\n每关是可预读的障碍段落，抵达终点时数字达到要求，才能击破数字墙。满体力通关可获三颗评价星。",
         "方向键连续移动，确认可短距离加速，冲刺冷却 2.4 秒。\n\n收集 +3 小数字，抢占 +8 和 ×2 运算环。运算环使用后冷却 7 秒。红方大于你时会追击，变得比你小时会逃跑；数字更大时碰到对手即可击败它并吸收数字。\n\n石柱会挡住双方，利用地形绕行。被更大对手撞到损失体力和部分数字。80 秒内连续击败 3 名对手获胜。",
         "方向键在连续世界中自由移动，确认短暂冲刺。黄色数字提供成长，蓝色同伴可以直接吸收；红色对手只有数字小于你时才可吞噬。\n\n更大的红方会追赶你，小红方会逃跑。先在安全处收集数字，再选择可追上的猎物。被大红方碰到会损失体力和部分数字。\n\n达到目标数字后，去地图东侧的圆形传送门撤离。右下角小地图标出你和出口的位置。100 秒内完成任务。",
-        "企鹅在起伏冰坡上自动滑行，确认或上键跳跃，空中再按一次可二段跳。左键刹车、右键加速；下键快速下落，按住下键可低身穿过冰拱。\n\n冰缝需要提前跳起，空中鱼群与星星奖励准确的起跳时机。比你小的冰块可以撞碎吸收，大冰块需要跳过。摔入冰缝或撞上危险损失体力。\n\n带够小鱼到达营地过关。星星跨关保存，每 5 颗换一种企鹅配色。"
+        "企鹅在起伏冰坡上自动滑行，确认或上键跳跃，空中再按一次可二段跳。左键刹车、右键加速；下键快速下落，按住下键可低身穿过冰拱。\n\n冰缝需要提前跳起，空中鱼群与星星奖励准确的起跳时机。比你小的冰块可以撞碎吸收，大冰块需要跳过。摔入冰缝或撞上危险损失体力。\n\n带够小鱼到达营地过关。星星跨关保存，每 5 颗换一种企鹅配色。",
+        "确认出发后，数字会自动前进和射击。左右键换道。蓝色数字被击中会变大，碰到就加进自己的数字，数字越大，子弹威力越强。避开红色减法数字和尖刺。\n\n绿色射速门和射程门会因射击而增强，通过门可领取加成。蓝色 ×2 门让当前数字翻倍。\n\n冲过黑白线即过关。之后逐个打破黄色数字墙赚金币，争取打开 7777 金库。大厅的「强化 / 选关」可用金币提升下次开局的数字和射速。"
     };
     private android.media.SoundPool audio;
     private final int[] sounds=new int[6];
@@ -56,7 +58,7 @@ public final class NativeActivity extends Activity {
         showLibrary();
         if(saved!=null && saved.getInt("mode",-1)>=0) {
             int mode=saved.getInt("mode");
-            if(mode<6) {
+            if(mode<TITLES.length) {
                 Game restored=Game.restore(prefs.getString("save-"+mode,null));
                 if(restored!=null) { view=new GameView(this,restored); setContentView(view); view.requestFocus(); }
             }
@@ -75,24 +77,27 @@ public final class NativeActivity extends Activity {
         ScrollView scroll=new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(0xff0e1829);
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(40),dp(24),dp(40),dp(20)); scroll.addView(root);
         root.addView(label("YOU GAME  /  迷你街机",14,0xff71cbd5));
-        TextView title=label("六种挑战，马上开玩",29,0xffedf4fd); title.setTypeface(null,Typeface.BOLD); title.setPadding(0,dp(5),0,dp(4)); root.addView(title);
+        TextView title=label("数字游乐场",29,0xffedf4fd); title.setTypeface(null,Typeface.BOLD); title.setPadding(0,dp(5),0,dp(4)); root.addView(title);
         root.addView(label("方向键选择 · 确认进入 · 连续动作玩法 · 无广告离线游玩",14,0xff9eb2ca));
-        cards=new Button[6];
-        for(int row=0;row<3;row++) {
+        cards=new Button[TITLES.length];
+        for(int row=0;row*2<cards.length;row++) {
             LinearLayout strip=new LinearLayout(this); root.addView(strip);
             for(int col=0;col<2;col++) {
                 final int mode=row*2+col;
-                int level=prefs.getInt("level-"+mode,1), best=prefs.getInt("best-"+mode,0);
+                if(mode>=cards.length) break;
+                int level=prefs.getInt("level-"+mode,1);
                 Button b=new Button(this); cards[mode]=b; b.setId(100+mode); b.setFocusableInTouchMode(true); b.setAllCaps(false); b.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL); b.setTextColor(0xffedf4fd); b.setTextSize(17); b.setPadding(dp(19),dp(8),dp(15),dp(8));
                 b.setText("0"+(mode+1)+"  "+TITLES[mode]+"   /   第 "+level+" 关\n"+SUBTITLES[mode]);
                 b.setDefaultFocusHighlightEnabled(false);
                 b.setBackground(background(0xff18283d,false));
-                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(86),1); lp.setMargins(0,dp(10),dp(col==0?12:0),0); strip.addView(b,lp);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(86),1); lp.setMargins(0,dp(10),dp(col==0 && mode+1<cards.length?12:0),0); strip.addView(b,lp);
                 b.setOnFocusChangeListener((v,focused)-> { b.setBackground(background(focused?0xff304761:0xff18283d,focused)); b.setTextColor(focused?0xffffdf9c:0xffedf4fd); if(focused) selected=mode; });
                 b.setOnClickListener(v-> choose(mode));
-                b.setNextFocusLeftId(100+row*2); b.setNextFocusRightId(100+row*2+1);
+                b.setOnKeyListener(this::moveLibraryFocus);
+                b.setNextFocusLeftId(100+row*2); b.setNextFocusRightId(100+Math.min(cards.length-1,row*2+1));
                 b.setNextFocusUpId(row==0?100+col:100+mode-2);
-                b.setNextFocusDownId(row==2?200:100+mode+2);
+                int nextRow=(row+1)*2;
+                b.setNextFocusDownId(nextRow>=cards.length?200:100+Math.min(cards.length-1,nextRow+col));
             }
         }
         Button legacy=new Button(this); legacy.setId(200); legacy.setAllCaps(false); legacy.setText("星球碰碰乐  ↗   打开原有游戏"); legacy.setTextSize(15); legacy.setTextColor(0xff71cbd5);
@@ -100,8 +105,23 @@ public final class NativeActivity extends Activity {
         legacy.setOnFocusChangeListener((v,f)->legacy.setBackground(background(f?0xff304761:0xff18283d,f)));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(48)); lp.topMargin=dp(12); root.addView(legacy,lp);
         legacy.setOnClickListener(v->startActivity(new Intent().setClassName(this,"com.wuzhanning.yougame.MainActivity")));
-        legacy.setNextFocusUpId(104); legacy.setNextFocusDownId(100);
-        setContentView(scroll); cards[Math.max(0,Math.min(5,selected))].requestFocus();
+        legacy.setOnKeyListener(this::moveLibraryFocus);
+        legacy.setNextFocusUpId(100+cards.length-1); legacy.setNextFocusDownId(100);
+        setContentView(scroll); cards[Math.max(0,Math.min(cards.length-1,selected))].requestFocus();
+    }
+    private boolean moveLibraryFocus(View view,int key,KeyEvent event) {
+        int target;
+        switch(key) {
+            case KeyEvent.KEYCODE_DPAD_UP: target=view.getNextFocusUpId(); break;
+            case KeyEvent.KEYCODE_DPAD_DOWN: target=view.getNextFocusDownId(); break;
+            case KeyEvent.KEYCODE_DPAD_LEFT: target=view.getNextFocusLeftId(); break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: target=view.getNextFocusRightId(); break;
+            default:return false;
+        }
+        View next=view.getRootView().findViewById(target);
+        if(next==null) return false;
+        if(event.getAction()==KeyEvent.ACTION_DOWN) next.requestFocus();
+        return true;
     }
     private void track(AlertDialog d) {
         dialog=d; d.setOnDismissListener(v->{ if(dialog==d) dialog=null; }); d.show();
@@ -123,13 +143,48 @@ public final class NativeActivity extends Activity {
         String description=SUBTITLES[mode]+"\n\n已解锁至第 "+prefs.getInt("level-"+mode,1)+" 关。\n"+(saved!=null?"已有第 "+saved.level+" 关存档。":"还没有存档，从第一关开始吧。");
         track(new AlertDialog.Builder(this).setTitle(TITLES[mode]).setMessage(description)
             .setPositiveButton(saved==null?"开始游戏":"继续存档",(d,w)->launch(saved==null?fresh(mode,1):saved))
-            .setNeutralButton("选择关卡",(d,w)->levelPicker(mode))
+            .setNeutralButton(mode==Game.NUMBER_SHOOTER?"强化 / 选关":"选择关卡",(d,w)->{
+                if(mode==Game.NUMBER_SHOOTER) shooterOptions(); else levelPicker(mode);
+            })
             .setNegativeButton("玩法说明",(d,w)->help(mode,()->choose(mode))).create());
     }
     private Game fresh(int mode,int level) {
         Game g=new Game(mode,level,System.nanoTime());
         if(mode==Game.PENGUIN) { g.stars=prefs.getInt("stars",0); g.skin=g.stars/5%3; }
+        if(mode==Game.NUMBER_SHOOTER) {
+            g.value=prefs.getInt("shooter-start",1);
+            g.next=prefs.getInt("shooter-rate",4);
+            g.stars=prefs.getInt("shooter-coins",0);
+        }
         return g;
+    }
+    private void shooterOptions() {
+        int mode=Game.NUMBER_SHOOTER;
+        int coins=prefs.getInt("shooter-coins",0), start=prefs.getInt("shooter-start",1), rate=prefs.getInt("shooter-rate",4);
+        int startCost=start*50, rateCost=(rate-3)*75;
+        String[] options={
+            "起始数字 "+start+(start>=20?" · 已满级":" → "+(start+1)+" · "+startCost+" 金币"),
+            "起始射速 "+rate+"/秒"+(rate>=12?" · 已满级":" → "+(rate+1)+"/秒 · "+rateCost+" 金币"),
+            "选择关卡"
+        };
+        AlertDialog d=new AlertDialog.Builder(this).setTitle("开局强化 · 金币 "+coins)
+            .setItems(options,(a,which)->{
+                if(which==2){levelPicker(mode);return;}
+                boolean number=which==0;
+                int cost=number?startCost:rateCost, current=number?start:rate;
+                if(current<(number?20:12) && coins>=cost) {
+                    int balance=coins-cost;
+                    SharedPreferences.Editor edit=prefs.edit().putInt("shooter-coins",balance)
+                        .putInt(number?"shooter-start":"shooter-rate",current+1);
+                    Game saved=Game.restore(prefs.getString("save-"+mode,null));
+                    if(saved!=null){saved.stars=balance;edit.putString("save-"+mode,saved.save());}
+                    edit.apply();
+                } else if(coins<cost && current<(number?20:12)) {
+                    Toast.makeText(this,"金币不足",Toast.LENGTH_SHORT).show();
+                }
+                shooterOptions();
+            }).setNegativeButton("返回",(a,w)->choose(mode)).create();
+        d.setOnCancelListener(a->choose(mode)); track(d);
     }
     private void levelPicker(int mode) {
         NumberPicker picker=new NumberPicker(this); picker.setMinValue(1); picker.setMaxValue(prefs.getInt("level-"+mode,1)); picker.setWrapSelectorWheel(false); picker.setDescendantFocusability(NumberPicker.FOCUS_BLOCK_DESCENDANTS);
@@ -154,6 +209,7 @@ public final class NativeActivity extends Activity {
         SharedPreferences.Editor e=prefs.edit().putString("save-"+g.mode,g.save()).putInt("best-"+g.mode,Math.max(g.score,prefs.getInt("best-"+g.mode,0)));
         if(g.state==1) e.putInt("level-"+g.mode,Math.max(Math.min(60,g.level+1),prefs.getInt("level-"+g.mode,1)));
         if(g.mode==Game.PENGUIN) e.putInt("stars",Math.max(g.stars,prefs.getInt("stars",0)));
+        if(g.mode==Game.NUMBER_SHOOTER) e.putInt("shooter-coins",g.stars);
         if(g.state==1) e.putInt("rating-"+g.mode+"-"+g.level,Math.max(g.rating(),prefs.getInt("rating-"+g.mode+"-"+g.level,0)));
         e.apply(); lastSave=SystemClock.uptimeMillis();
     }

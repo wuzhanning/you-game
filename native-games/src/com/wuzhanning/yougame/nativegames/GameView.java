@@ -21,8 +21,11 @@ final class GameView extends View {
     private final LinearGradient towerSky=new LinearGradient(0,100,0,650,0xffa4a3d5,0xfff4c5b6,Shader.TileMode.CLAMP);
     private final String[] bodyLabels=new String[Game.CAPACITY];
     private final int[] bodyCodes=new int[Game.CAPACITY];
+    private final int[] shooterDepthOrder=new int[Game.CAPACITY];
     private String number="",score="",clock="",objective="",progressText="",level="",next="",reserve="",combo="",cooldown="",heading="",targetNumber="";
     private String accessible="";
+    private String shooterWallet="", shooterStats="";
+    private int oldWallet=-1;
     private int oldValue=-1,oldScore=-1,oldTime=-1,oldNext=-1,oldReserve=-1,oldProgress=-1,oldCombo=-1,oldCooldown=-1;
     private float scale=1,offsetX,offsetY,touchX,touchY;
     private long previous;
@@ -49,7 +52,7 @@ final class GameView extends View {
         setDefaultFocusHighlightEnabled(false); setFocusable(true); setFocusableInTouchMode(true);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         Arrays.fill(bodyCodes,Integer.MIN_VALUE); level="第 "+game.level+" 关";
-        objective=game.mode==Game.MERGE?"合成 "+game.target:game.mode==Game.STACK?"完成 "+game.target+" 次落塔":game.mode==Game.RUN?"冲线时数字 ≥ "+game.target:game.mode==Game.DUEL?"击败 3 名对手":game.mode==Game.COLOR?"成长到 "+game.target+" · 东侧出口":"带回 ≥ "+game.target+" 条小鱼";
+        objective=game.mode==Game.MERGE?"合成 "+game.target:game.mode==Game.STACK?"完成 "+game.target+" 次落塔":game.mode==Game.RUN?"冲线时数字 ≥ "+game.target:game.mode==Game.DUEL?"击败 3 名对手":game.mode==Game.COLOR?"成长到 "+game.target+" · 东侧出口":game.mode==Game.NUMBER_SHOOTER?"壮大数字 · 冲击 "+game.target+" 金库":"带回 ≥ "+game.target+" 条小鱼";
         heading=level+"  ·  "+objective; targetNumber=Integer.toString(game.target);
         setClickable(true); refresh();
     }
@@ -64,6 +67,10 @@ final class GameView extends View {
         if(oldValue!=game.value) { oldValue=game.value; number=Integer.toString(game.value); }
         if(oldScore!=game.score) { oldScore=game.score; score="得分 "+game.score; }
         if(oldTime!=(int)game.time) { oldTime=(int)game.time; clock=oldTime+"s"; }
+        if(game.mode==Game.NUMBER_SHOOTER){
+            if(oldNext!=game.next || oldReserve!=game.reserve) shooterStats="射速 "+game.next+"/秒    射程 "+game.reserve;
+            if(oldWallet!=game.stars){oldWallet=game.stars;shooterWallet="金币 "+game.stars;}
+        }
         if(oldNext!=game.next) { oldNext=game.next; next=Integer.toString(game.next); }
         if(oldReserve!=game.reserve) { oldReserve=game.reserve; reserve=Integer.toString(game.reserve); }
         int progress=game.mode==Game.STACK?game.drops:game.mode==Game.DUEL?game.enemies:game.mode==Game.COLOR?Math.min(game.target,game.value):(int)game.progress;
@@ -72,7 +79,11 @@ final class GameView extends View {
         if(oldCooldown!=(int)Math.ceil(game.cooldown)) { oldCooldown=(int)Math.ceil(game.cooldown); cooldown=oldCooldown==0?"确认：冲刺就绪":"冲刺冷却 "+oldCooldown+"s"; }
         for(int i=0;i<game.bodies.length;i++) {
             Game.Body b=game.bodies[i]; int code=b.number*32+b.kind;
-            if(bodyCodes[i]!=code) { bodyCodes[i]=code; bodyLabels[i]=b.kind==Game.ADD?(b.number>=0?"+":"")+b.number:b.kind==Game.MULTIPLY?"×"+b.number:Integer.toString(b.number); }
+            if(bodyCodes[i]!=code) {
+                bodyCodes[i]=code;
+                boolean add=b.kind==Game.ADD || (game.mode==Game.NUMBER_SHOOTER && b.kind==Game.STAR);
+                bodyLabels[i]=add && b.number>=0?"+"+b.number:b.kind==Game.MULTIPLY?"×"+b.number:Integer.toString(b.number);
+            }
         }
         if(changed) { accessible=NativeActivity.TITLES[game.mode]+"，"+objective+"，数字 "+number+"，"+score+"，体力 "+game.hp; setContentDescription(accessible); }
     }
@@ -100,6 +111,7 @@ final class GameView extends View {
         if(game.mode==Game.MERGE) blaster(c);
         else if(game.mode==Game.STACK) tower(c);
         else if(game.mode==Game.RUN) runner(c);
+        else if(game.mode==Game.NUMBER_SHOOTER) numberShooter(c);
         else if(game.mode==Game.DUEL || game.mode==Game.COLOR) arena(c);
         else penguinWorld(c);
         effects(c); c.restore(); hud(c);
@@ -119,9 +131,15 @@ final class GameView extends View {
         float progress=game.mode==Game.MERGE?game.value/(float)game.target:game.mode==Game.STACK?game.drops/(float)game.target:game.mode==Game.DUEL?game.enemies/3f:game.mode==Game.COLOR?game.value/(float)game.target:game.progress/game.goal;
         rect(c,650,40,205*Math.min(1,progress),13,TEAL,7);
         text(c,game.mode==Game.MERGE?"合成进度":progressText,650,85,18,WHITE,false);
-        text(c,clock,870,65,23,GOLD,false);
-        text(c,HEARTS[game.hp],950,58,24,RED,false);
-        text(c,score,950,91,18,WHITE,false);
+        if(game.mode==Game.NUMBER_SHOOTER){
+            text(c,shooterWallet,875,61,21,GOLD,false);
+            text(c,shooterStats,875,91,18,WHITE,false);
+            text(c,HEARTS[game.hp],770,87,18,RED,false);
+        } else {
+            text(c,clock,870,65,23,GOLD,false);
+            text(c,HEARTS[game.hp],950,58,24,RED,false);
+            text(c,score,950,91,18,WHITE,false);
+        }
         rect(c,1130,38,86,57,TEAL,16); text(c,number,1173,77,28,INK,true);
         rect(c,40,647,1200,49,INK,16);
         text(c,NativeActivity.HINTS[game.mode][0],59,678,18,WHITE,false);
@@ -190,6 +208,83 @@ final class GameView extends View {
     private float depth(float z) { return Game.clamp(1-z/90,0,1); }
     private float roadY(float z) { float t=depth(z); return 215+t*t*385; }
     private float roadX(float lane,float z) { float t=depth(z); return 640+(lane-1)*(35+t*t*275); }
+    private void outlinedNumber(Canvas c,String label,float x,float y,float size,int color){
+        p.setStyle(Paint.Style.STROKE); p.setStrokeJoin(Paint.Join.ROUND);
+        p.setStrokeWidth(Math.max(1,size*.10f)); text(c,label,x,y,size,0xff252c40,true);
+        p.setStyle(Paint.Style.FILL); text(c,label,x,y,size,color,true);
+    }
+    private void numberShooter(Canvas c){
+        rect(c,40,125,1200,510,0xffb4f3f8,0);
+        float finish=Game.SHOOTER_FINISH-game.progress;
+        int nearColor=finish<=0?0xffb1b8cc:0xff292e38;
+        quad(c,0xffe6edfa,roadX(-.54f,90),215,roadX(2.54f,90),215,1160,635,120,635);
+        quad(c,nearColor,roadX(-.5f,90),215,roadX(2.5f,90),215,1140,635,140,635);
+        int stripe=(int)(game.progress/6);
+        for(int i=15;i>=0;i--){
+            float z=i*6-game.progress%6, far=Math.min(90,z+6);
+            if(far<=0) continue;
+            float near=Math.max(0,z);
+            boolean reward=near>=finish;
+            int color=(stripe+i)%2==0?(reward?0xffbec6d8:0xff333944):(reward?0xffa4adc1:0xff232832);
+            quad(c,color,roadX(-.5f,far),roadY(far),roadX(2.5f,far),roadY(far),
+                roadX(2.5f,near),roadY(near),roadX(-.5f,near),roadY(near));
+        }
+        if(finish>=0 && finish<90){
+            for(int i=0;i<12;i++){
+                float l=-.5f+i*.25f,r=l+.25f;
+                quad(c,i%2==0?WHITE:0xff151924,roadX(l,finish+2),roadY(finish+2),roadX(r,finish+2),roadY(finish+2),
+                    roadX(r,finish),roadY(finish),roadX(l,finish),roadY(finish));
+            }
+        }
+        if(game.goal-game.progress>=90){
+            rect(c,588,196,104,19,0xff323c57,3);
+            outlinedNumber(c,targetNumber,640,194,23,0xffffd735);
+        }
+        int visible=0;
+        for(int i=0;i<game.bodies.length;i++){
+            Game.Body b=game.bodies[i];
+            if(!b.active || b.y<game.progress || b.y>game.progress+90) continue;
+            int at=visible++;
+            while(at>0 && game.bodies[shooterDepthOrder[at-1]].y<b.y){
+                shooterDepthOrder[at]=shooterDepthOrder[at-1];at--;
+            }
+            shooterDepthOrder[at]=i;
+        }
+        for(int j=0;j<visible;j++){
+            int i=shooterDepthOrder[j];
+            Game.Body b=game.bodies[i]; float z=b.y-game.progress;
+            float t=depth(z),s=.18f+t*t*.82f,x=roadX(b.x,z),y=roadY(z);
+            if(b.tag==1 && b.age<.14f) star(c,x,y-36*s,(30+b.age*190)*s,0xccffffff);
+            if(b.kind==Game.SHOT){
+                line(c,x,y-9*s,x,y+3*s,0xff82a1ff,5*s);
+                outlinedNumber(c,bodyLabels[i],x,y-12*s,19*s,0xffb0c2ff);
+            } else if(b.kind==Game.FOOD){
+                outlinedNumber(c,bodyLabels[i],x,y-12*s,59*s,b.number>0?0xff879dff:0xffff4c57);
+            } else if(b.kind==Game.LOW){
+                quad(c,0xff222430,x-86*s,y-28*s,x+86*s,y-28*s,x+94*s,y,x-94*s,y);
+                for(int k=-2;k<=2;k++){
+                    float spike=x+k*34*s;
+                    quad(c,0xffff5960,spike-14*s,y-4*s,spike,y-54*s,spike+15*s,y-4*s,spike,y+2*s);
+                }
+            } else if(b.kind==Game.BLOCK){
+                boolean vault=b.y==game.goal;
+                if(vault){
+                    rect(c,x-142*s,y-150*s,284*s,151*s,0xff323c57,10*s);
+                    text(c,"终点金库",x,y-116*s,24*s,WHITE,true);
+                }
+                outlinedNumber(c,bodyLabels[i],x,y-10*s,(vault?88:72)*s,0xffffd735);
+            } else {
+                int color=b.kind==Game.MULTIPLY?0xff60e3f6:0xffa6e946;
+                rect(c,x-102*s,y-113*s,204*s,111*s,0xda334b49,9*s);
+                rect(c,x-102*s,y-113*s,204*s,29*s,color,6*s);
+                text(c,b.kind==Game.ADD?"射速":b.kind==Game.STAR?"射程":"数字",x,y-91*s,21*s,INK,true);
+                outlinedNumber(c,bodyLabels[i],x,y-27*s,47*s,color);
+            }
+        }
+        float playerX=roadX(game.lane,0);
+        oval(c,playerX,604,132,16,0x58141823);
+        outlinedNumber(c,number,playerX,590,Math.max(49,92-number.length()*6)+game.pulse*14,0xff8c9fff);
+    }
     private void runner(Canvas c) {
         p.setShader(runSky); c.drawRect(40,125,1240,635,p); p.setShader(null);
         circle(c,1060,187,42,0xffffefb5);
@@ -424,7 +519,9 @@ final class GameView extends View {
         if(e.getAction()==MotionEvent.ACTION_UP) {
             float dx=e.getX()-touchX,dy=e.getY()-touchY;
             if(Math.max(Math.abs(dx),Math.abs(dy))>30*getResources().getDisplayMetrics().density) {
-                int d=Math.abs(dx)>Math.abs(dy)?(dx>0?2:0):(dy>0?3:1); direction(d,false); game.release(d);
+                int d=Math.abs(dx)>Math.abs(dy)?(dx>0?2:0):(dy>0?3:1);
+                if(ready && game.mode==Game.NUMBER_SHOOTER && d%2==0) confirm();
+                direction(d,false); game.release(d);
             } else performClick(); return true;
         }
         return true;

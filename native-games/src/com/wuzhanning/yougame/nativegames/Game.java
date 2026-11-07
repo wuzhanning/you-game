@@ -4,13 +4,15 @@ import java.io.*;
 import java.util.Base64;
 import java.util.zip.CRC32;
 
-/** Six continuous action games. Coordinates are world units, never board cells. */
+/** Continuous action games. Coordinates are world units, never board cells. */
 public final class Game {
-    public static final int MERGE=0, STACK=1, RUN=2, DUEL=3, COLOR=4, PENGUIN=5;
+    public static final int MERGE=0, STACK=1, RUN=2, DUEL=3, COLOR=4, PENGUIN=5, NUMBER_SHOOTER=6;
     public static final int ORB=1, SHOT=2, BLOCK=3, FOOD=4, WALL=5, LOW=6, HIGH=7, ADD=8, MULTIPLY=9, STAR=10, RIVAL=11, FRIEND=12, ROCK=13;
     public static final int LIMIT=99999, CAPACITY=96;
     public static final float EXIT_X=2280, EXIT_Y=780, EXIT_RADIUS=55;
     public static final float ICE_HEIGHT=74, ARCH_TOP=92, ARCH_HEIGHT=30;
+    static final int SHOOTER_FINISH=370;
+    private static final int[] REWARD_WALLS={2,4,8,15,25,40,63,90,125,175,240,350,500,750,1000,1564,2400};
     public static final class Body {
         public int kind, number, tag;
         public float x,y,vx,vy,w,h,age;
@@ -28,12 +30,13 @@ public final class Game {
     public long seed;
     private float tapX,tapY,tapTime,stepRemainder;
     public Game(int mode,int level,long seed) {
-        if(mode<0 || mode>5 || level<1 || level>60) throw new IllegalArgumentException("Invalid game");
+        if(mode<0 || mode>NUMBER_SHOOTER || level<1 || level>60) throw new IllegalArgumentException("Invalid game");
         this.mode=mode; this.level=level; this.seed=seed;
         for(int i=0;i<CAPACITY;i++) bodies[i]=new Body();
         if(mode==MERGE) initBlaster();
         else if(mode==STACK) initTower();
         else if(mode==RUN) initRun();
+        else if(mode==NUMBER_SHOOTER) initNumberShooter();
         else if(mode==DUEL || mode==COLOR) initArena();
         else initPenguin();
     }
@@ -53,11 +56,11 @@ public final class Game {
             if(d==0) aim=Math.max(-1.05f,aim-.075f);
             if(d==2) aim=Math.min(1.05f,aim+.075f);
             if(d==1 && cooldown<=0) { int n=next; next=reserve; reserve=n; cooldown=.25f; }
-        } else if(mode==RUN) {
+        } else if(mode==RUN || mode==NUMBER_SHOOTER) {
             if(d==0 && (!repeat || cooldown<=0)) { laneTarget=Math.max(0,laneTarget-1); cooldown=.14f; }
             if(d==2 && (!repeat || cooldown<=0)) { laneTarget=Math.min(2,laneTarget+1); cooldown=.14f; }
-            if(d==1 && !repeat) jumpAction();
-            if(d==3 && !repeat) { roll=.65f; jump=0; }
+            if(mode==RUN && !repeat && d==1) jumpAction();
+            if(mode==RUN && !repeat && d==3) { roll=.65f; jump=0; }
         } else if(mode==PENGUIN && !repeat && d==1) jumpAction();
         else if((mode==DUEL || mode==COLOR) && !repeat) {
             tapX=d==0?-1:d==2?1:0; tapY=d==1?-1:d==3?1:0; tapTime=.18f;
@@ -69,7 +72,7 @@ public final class Game {
         if(mode==MERGE) shoot();
         else if(mode==STACK) dropTower();
         else if(mode==RUN || mode==PENGUIN) jumpAction();
-        else if(cooldown<=0) { boost=.28f; cooldown=2.4f; sound=2; burst(px,py,0xff63d6ce,8); }
+        else if((mode==DUEL || mode==COLOR) && cooldown<=0) { boost=.28f; cooldown=2.4f; sound=2; burst(px,py,0xff63d6ce,8); }
     }
     private void jumpAction() {
         if(mode==RUN) { if(jump<=0) { jump=.84f; roll=0; sound=2; } return; }
@@ -95,6 +98,7 @@ public final class Game {
         if(mode==MERGE) updateBlaster(dt);
         else if(mode==STACK) updateTower(dt);
         else if(mode==RUN) updateRun(dt);
+        else if(mode==NUMBER_SHOOTER) updateNumberShooter(dt);
         else if(mode==DUEL || mode==COLOR) updateArena(dt);
         else updatePenguin(dt);
         if(time<=0 && state==0) lose("时间到了，再试一次更好的路线");
@@ -278,6 +282,106 @@ public final class Game {
             else { add(HIGH,1,z,0,1,1); add(FOOD,2,z,6,1,1); }
         }
         message="三条跑道 · 收集数字，选择更好的运算门";
+    }
+    private void initNumberShooter() {
+        value=1; next=4; reserve=44; time=60;
+        goal=535; target=7777;
+        add(FOOD,1,24,1,1,1);
+        add(ADD,1,47,1,1,1);
+        for(int section=0;section<5;section++){
+            int z=68+section*56, good=(section+level)%3, alternate=(good+1)%3;
+            int growth=2+section+level/4;
+            add(FOOD,good,z,growth,1,1);
+            add(FOOD,alternate,z,-growth,1,1);
+            add(section%2==0?STAR:ADD,good,z+17,section%2==0?4:1,1,1);
+            add(FOOD,alternate,z+17,growth+2,1,1);
+            add(LOW,(good+2)%3,z+32,0,1,1);
+            add(FOOD,good,z+32,growth*2,1,1);
+            if(section==2 || section==4) add(MULTIPLY,alternate,z+48,2,1,1);
+        }
+        int difficulty=1+(level-1)/8;
+        for(int i=0;i<REWARD_WALLS.length;i++){
+            int strength=REWARD_WALLS[i]*difficulty;
+            add(BLOCK,1,380+i*8,strength,2,Math.min(200,8+i*3));
+        }
+        add(BLOCK,1,goal,target,2,200);
+        message="自动发射数字子弹 · 左右换道";
+    }
+    private void updateNumberShooter(float dt) {
+        float previous=progress;
+        lane+=(laneTarget-lane)*Math.min(1,dt*15);
+        progress+=(progress<SHOOTER_FINISH?18:12)*dt;
+        if(previous<SHOOTER_FINISH && progress>=SHOOTER_FINISH)
+            event("冲线！击破奖励数字墙",640,490,0xffffcf64,true);
+
+        spawn-=dt;
+        if(spawn<=0){
+            Body shot=add(SHOT,lane,progress+2,value,.18f,0);
+            if(shot!=null) shot.h=reserve;
+            spawn=1f/next;
+        }
+        for(Body shot:bodies) if(shot.active && shot.kind==SHOT) {
+            float end=Math.min(shot.y+112*dt,progress+shot.h);
+            Body front=null;
+            for(Body b:bodies){
+                boolean shootable=b.kind==FOOD && b.number>0 || b.kind==ADD || b.kind==STAR || b.kind==BLOCK;
+                if(b.active && shootable && b.y>=shot.y && b.y<=end &&
+                    Math.abs(shot.x-b.x)<(b.kind==BLOCK?2:.46f) && (front==null || b.y<front.y)) front=b;
+            }
+            if(front!=null){
+                shot.active=false;
+                front.age=0;
+                front.tag=1;
+                if(front.kind==FOOD) front.number=capped((long)front.number+Math.max(1,shot.number/48));
+                else if(front.kind==BLOCK){
+                    front.number=Math.max(0,front.number-Math.max(1,shot.number/8));
+                    if(front.number==0) clearRewardWall(front);
+                } else {
+                    front.vx++;
+                    if(front.vx>=3){
+                        front.number=Math.min(front.kind==ADD?8:24,front.number+1);
+                        front.vx=0;
+                    }
+                }
+            } else {
+                shot.y=end;
+                if(end>=progress+shot.h) shot.active=false;
+            }
+        }
+        for(Body b:bodies) if(b.active && b.kind!=SHOT && b.y<=progress+1){
+            if(b.kind==BLOCK){
+                if(value<b.number){win("奖励跑道结束 · 本关获得 "+score+" 金币");return;}
+                clearRewardWall(b);
+                continue;
+            }
+            b.active=false;
+            if(Math.abs(lane-b.x)>=.46f) continue;
+            if(b.kind==FOOD){
+                value=capped((long)value+b.number);
+                if(value==0){lose("数字归零了，试着避开红色数字");return;}
+                event((b.number>0?"+":"")+b.number,640,500,b.number>0?0xff73abff:0xffff6969,false);
+            } else if(b.kind==ADD){
+                next=Math.min(18,next+b.number);
+                event("射速 +"+b.number,640,500,0xff91e758,true);
+            } else if(b.kind==STAR){
+                reserve=Math.min(85,reserve+b.number);
+                event("射程 +"+b.number,640,500,0xff91e758,true);
+            } else if(b.kind==MULTIPLY){
+                value=capped((long)value*2);
+                event("数字 ×2",640,500,0xff54dcec,true);
+            } else if(b.kind==LOW && hit("撞到尖刺")){
+                value=Math.max(1,value*2/3);
+                if(state!=0) return;
+            }
+        }
+        if(progress>=goal) win("击破终点金库！本关获得 "+score+" 金币");
+    }
+    private void clearRewardWall(Body wall) {
+        wall.active=false;
+        int coins=(int)wall.h;
+        stars=capped((long)stars+coins);
+        score(coins);
+        event("+"+coins+" 金币",640,500,0xffffdb48,true);
     }
     public float jumpHeight() { return jump<=0?0:(float)Math.sin((.84f-jump)/.84f*Math.PI)*110; }
     private void updateRun(float dt) {

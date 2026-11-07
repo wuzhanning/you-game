@@ -127,7 +127,7 @@ public final class GameCheck {
     }
     private static void savesAndBounds() {
         check(Game.restore(null)==null && Game.restore("bad")==null,"invalid save fails closed");
-        for(int mode=0;mode<6;mode++) for(int level:new int[]{1,8,20,40,60}) {
+        for(int mode=0;mode<=Game.NUMBER_SHOOTER;mode++) for(int level:new int[]{1,8,20,40,60}) {
             Game g=new Game(mode,level,1234);
             for(int tick=0;tick<1400 && g.state==0;tick++) {
                 if(tick%30==0) g.input((tick/30)%4);
@@ -219,5 +219,34 @@ public final class GameCheck {
         g.add(Game.LOW,g.px,Game.ground(g.px)-32,100,35,60); g.add(Game.FOOD,g.px+5,g.py,99,16,16); advance(g,17);
         check(g.state==2 && g.score==0 && g.message.contains("体力"),"penguin death stops pickups in the same physics step");
     }
-    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); savesAndBounds(); logicRegressions(); System.out.println("Arcade checks passed: "+checks); }
+    private static void numberShooter() {
+        Game g=empty(Game.NUMBER_SHOOTER);
+        Game.Body blue=g.add(Game.FOOD,1,30,1,1,1), red=g.add(Game.FOOD,1,47,-4,1,1);
+        Game.Body gate=g.add(Game.ADD,1,55,1,1,1);
+        advance(g,900);
+        check(blue.number>1 && blue.active && red.number==-4,"automatic bullets strengthen blue numbers without changing red penalties");
+        advance(g,2400);
+        check(g.next>=6 && g.value>1 && !gate.active,"shooting a green gate improves its reward before crossing");
+        g=empty(Game.NUMBER_SHOOTER);
+        g.add(Game.FOOD,1,0,-1,1,1); advance(g,40);
+        check(g.state==2 && g.value==0,"a red number can end a run before the reward track");
+
+        for(int level:new int[]{1,30,60}){
+            g=new Game(Game.NUMBER_SHOOTER,level,12345);
+            for(int tick=0;tick<2100 && g.state==0;tick++){
+                if(g.progress<Game.SHOOTER_FINISH){
+                    Game.Body next=null;
+                    for(Game.Body b:g.bodies){
+                        boolean useful=b.kind==Game.FOOD && b.number>0 || b.kind==Game.ADD || b.kind==Game.STAR || b.kind==Game.MULTIPLY;
+                        if(b.active && useful && (next==null || b.y<next.y)) next=b;
+                    }
+                    if(next!=null && Math.abs(next.x-g.laneTarget)>.01f) g.input(next.x<g.laneTarget?0:2);
+                }
+                g.update(17);
+            }
+            check(g.state==1 && g.progress>=Game.SHOOTER_FINISH && g.stars>0 && g.stars==g.score,"reward track pays coins on a viable route at level "+level);
+            check(Game.restore(g.save()).stars==g.stars,"wallet and completed round persist");
+        }
+    }
+    public static void main(String[] args) { blaster(); tower(); runner(); arena(); penguin(); numberShooter(); savesAndBounds(); logicRegressions(); System.out.println("Arcade checks passed: "+checks); }
 }

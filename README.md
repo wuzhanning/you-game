@@ -1,6 +1,6 @@
 # YouGame · 电视数字游乐场
 
-Android TV 应用包含六款非棋盘原生 Java / Canvas 动作游戏，并保留星球碰碰乐入口。目标 Android 9、2GB 内存电视，支持遥控器、离线游玩、独立存档与关卡解锁。
+Android TV 应用包含七款非棋盘原生 Java / Canvas 动作游戏，并保留星球碰碰乐入口。目标 Android 9、2GB 内存电视，支持遥控器、离线游玩、独立存档与关卡解锁。
 
 安装包：[YouGame-TV-debug.apk](android-tv/releases/YouGame-TV-debug.apk) · [电视安装说明](android-tv/README.md) · [原生游戏与扩展目录](native-games/README.md)。
 
