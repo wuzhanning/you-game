@@ -5,23 +5,27 @@ function direction2048(x=0,y=0){
   return Math.abs(x)>Math.abs(y)?(x<0?'left':'right'):(y<0?'up':'down');
 }
 function slide2048(board,direction){
-  const next=board.slice();
+  const next=Array(16).fill(0),tiles=[],merges=[];
   let points=0;
   for(let line=0;line<4;line++){
     const cells=[0,1,2,3].map(i=>{
       const offset=direction==='right'||direction==='down'?3-i:i;
       return direction==='up'||direction==='down'?offset*4+line:line*4+offset;
     });
-    const values=cells.map(i=>board[i]).filter(Boolean);
-    const merged=[];
-    for(let i=0;i<values.length;i++){
-      let value=values[i];
-      if(value===values[i+1]){value*=2;points+=value;i++;}
-      merged.push(value);
+    const occupied=cells.filter(i=>board[i]);
+    for(let i=0,destination=0;i<occupied.length;i++,destination++){
+      const from=occupied[i],to=cells[destination];
+      let value=board[from];
+      tiles.push({from,to});
+      if(value===board[occupied[i+1]]){
+        value*=2;points+=value;
+        tiles.push({from:occupied[++i],to});
+        merges.push(to);
+      }
+      next[to]=value;
     }
-    cells.forEach((cell,i)=>{next[cell]=merged[i]||0;});
   }
-  return {next,points,changed:next.some((value,i)=>value!==board[i])};
+  return {next,points,tiles,merges,changed:tiles.some(({from,to})=>from!==to)};
 }
 function canMove2048(board){
   return board.some((n,i)=>!n||(i%4<3&&n===board[i+1])||(i<12&&n===board[i+4]));
@@ -37,7 +41,7 @@ function initClassic(){
   const cells=Array.from({length:16},()=>{
     const el=document.createElement('span');el.className='classic-tile';boardEl.append(el);return el;
   });
-  let round,gesture;
+  let round,gesture,slideLayer,animations=[];
   const won=()=>!round.continued&&round.board.includes(2048);
   function read(){
     try{
@@ -62,16 +66,48 @@ function initClassic(){
     $('classic-continue').hidden=!won();
     $('classic-status').textContent=won()?'你合成了 2048！':!canMove2048(round.board)?'没有可移动的方块，本局结束。':'滑动方块，合成 '+(round.continued?'更大的数字':'2048')+'！';
   }
+  function clearMotion(){
+    animations.forEach(animation=>animation.cancel());
+    animations=[];
+    if(slideLayer){slideLayer.remove();slideLayer=null;boardEl.classList.remove('classic-sliding');}
+  }
+  function animateMove(tiles,merges){
+    clearMotion();
+    if(!boardEl.animate||(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches))return;
+    const layer=document.createElement('div');
+    layer.className='classic-motion';layer.setAttribute('aria-hidden','true');
+    slideLayer=layer;
+    boardEl.append(layer);
+    for(const {from,to} of tiles){
+      const source=cells[from],target=cells[to],tile=source.cloneNode(true);
+      tile.style.left=source.offsetLeft+'px';tile.style.top=source.offsetTop+'px';
+      tile.style.width=source.offsetWidth+'px';tile.style.height=source.offsetHeight+'px';
+      layer.append(tile);
+      if(from===to)continue;
+      const x=target.offsetLeft-source.offsetLeft,y=target.offsetTop-source.offsetTop;
+      animations.push(tile.animate([{transform:'translate(0,0)'},{transform:'translate('+x+'px,'+y+'px)'}],
+        {duration:125,easing:'ease-out',fill:'forwards'}));
+    }
+    boardEl.classList.add('classic-sliding');
+    animations[0].onfinish=()=>{
+      if(slideLayer!==layer)return;
+      clearMotion();
+      animations=merges.map(to=>cells[to].animate([
+        {transform:'scale(.88)'},{transform:'scale(1.18)',offset:.45},{transform:'scale(1)'}
+      ],{duration:175,easing:'ease-out'}));
+    };
+  }
   function resetRound(){
+    clearMotion();
     round.board.fill(0);round.score=0;round.continued=false;
     spawn2048(round.board);spawn2048(round.board);save();render();
   }
   function move(direction){
     if(won()||document.querySelector('dialog[open]'))return;
-    const {next,points,changed}=slide2048(round.board,direction);
+    const {next,points,tiles,merges,changed}=slide2048(round.board,direction);
     if(!changed)return;
     spawn2048(next);round.board=next;round.score+=points;round.best=Math.max(round.score,round.best);
-    save();render();
+    save();animateMove(tiles,merges);render();
     if(points)beep('merge');else if(!canMove2048(next))beep('end');
   }
   function continueRound(){
@@ -79,6 +115,7 @@ function initClassic(){
   }
   function select(active){
     if(classicActive===active)return;
+    clearMotion();
     if(active){
       saveGame();pendingDrop=null;
       if(!round){round=read();if(!round.board.some(Boolean))resetRound();}

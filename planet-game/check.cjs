@@ -311,11 +311,17 @@ console.log('PASS: all five saves refill to exactly 100 once, preserving progres
 
 const {slide2048,canMove2048,spawn2048}=require('./dist/2048.js');
 const tiles=[2,2,2,2,4,0,4,8,0,0,0,0,0,0,0,0];
-assert.deepEqual(slide2048(tiles,'left'),{next:[4,4,0,0,8,8,0,0,0,0,0,0,0,0,0,0],points:16,changed:true});
+assert.deepEqual(slide2048(tiles,'left'),{
+  next:[4,4,0,0,8,8,0,0,0,0,0,0,0,0,0,0],points:16,changed:true,merges:[0,1,4],
+  tiles:[[0,0],[1,0],[2,1],[3,1],[4,4],[6,4],[7,5]].map(([from,to])=>({from,to}))
+});
 assert.deepEqual(slide2048(tiles,'right').next.slice(0,8),[0,0,4,4,0,0,8,8]);
 assert.deepEqual(slide2048(tiles,'up').next.slice(0,8),[2,2,2,2,4,0,4,8]);
 assert(!slide2048(tiles,'up').changed);
 assert.deepEqual(slide2048(tiles,'down').next.slice(8),[2,0,2,2,4,2,4,8]);
+const verticalMerge=slide2048([2,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0],'down');
+assert.deepEqual(verticalMerge.tiles,[{from:8,to:12},{from:0,to:12}]);
+assert.deepEqual(verticalMerge.merges,[12]);
 const blocked=[2,4,2,4,4,2,4,2,2,4,2,4,4,2,4,2];
 assert(!canMove2048(blocked));blocked[15]=4;assert(canMove2048(blocked));
 const rolls=[.99,.95],empty=Array(16).fill(0);spawn2048(empty,()=>rolls.shift());
